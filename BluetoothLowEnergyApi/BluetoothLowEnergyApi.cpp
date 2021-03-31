@@ -92,13 +92,13 @@ void AddErrorAsync(Data error)
 	}
 	catch (...)
 	{
-		//AddError("AddErrorAsync error: exception catched");
+		//AddError("AddErrorAsync error: exception caught");
 	}
 }
 
 void AddError(const char* message, ...)
 {
-	try 
+	try
 	{
 		Data error;
 		va_list args;
@@ -110,14 +110,14 @@ void AddError(const char* message, ...)
 	}
 	catch (...)
 	{
-		//AddError("AddError error: exception catched");
+		//AddError("AddError error: exception caught");
 	}
 }
 
 DllExport bool PollErrors(Data* e)
 {
 	if (e == nullptr)return false;
-	try 
+	try
 	{
 		lock_guard lock(errorLock);
 
@@ -132,7 +132,7 @@ DllExport bool PollErrors(Data* e)
 	}
 	catch (...)
 	{
-		AddError("PollErrors error: exception catched");
+		AddError("PollErrors error: exception caught");
 	}
 
 	return false;
@@ -144,9 +144,9 @@ DllExport bool PollEvents(Event* ev)
 {
 	if (ev == nullptr)return false;
 	lock_guard lock(eventsLock); // TODO check why it needs to be here
-	try 
+	try
 	{
-		
+
 		if (!events.empty())
 		{
 			*ev = events.front();
@@ -156,18 +156,18 @@ DllExport bool PollEvents(Event* ev)
 	}
 	catch (...)
 	{
-		AddError("PollEvents error: exception catched");
+		AddError("PollEvents error: exception caught");
 	}
-	
+
 	ev->who = Device();
 	ev->what = What::LIBRARY_NOTHING;
-	
+
 	return false;
 }
 
 void AddEventAsync(Device device, What what)
 {
-	try 
+	try
 	{
 		Event cb;
 		cb.who = device;
@@ -176,9 +176,9 @@ void AddEventAsync(Device device, What what)
 		lock_guard lock(eventsLock);
 		events.push(cb);
 	}
-	catch (...) 
+	catch (...)
 	{
-		//AddError("AddEventAsync error: exception catched");
+		//AddError("AddEventAsync error: exception caught");
 	}
 }
 
@@ -190,13 +190,13 @@ void AddEvent(Device device, What what)
 	}
 	catch (...)
 	{
-		//AddError("AddEvent(Device device, What what) error: exception catched");
+		//AddError("AddEvent(Device device, What what) error: exception caught");
 	}
 }
 
 void AddEvent(What what)
 {
-	try 
+	try
 	{
 		Device odev;
 		odev.address = 0;
@@ -205,7 +205,7 @@ void AddEvent(What what)
 	}
 	catch (...)
 	{
-		//AddError("AddEvent(What what)  error: exception catched");
+		//AddError("AddEvent(What what)  error: exception caught");
 	}
 }
 
@@ -238,7 +238,7 @@ DllExport bool IsBluetoothEnabled()
 	}
 	catch (...)
 	{
-		AddError("IsBluetoothEnabled error: exception catched");
+		AddError("IsBluetoothEnabled error: exception caught");
 	}
 	return false;
 }
@@ -248,7 +248,7 @@ DllExport bool IsBluetoothEnabled()
 AdvertisedDevice* GetAdvertisedDevice(uint64_t deviceAddress)
 {
 	if (deviceAddress == 0) return nullptr;
-	try 
+	try
 	{
 		for (AdvertisedDevice* device : advertisedDevices)
 		{
@@ -260,9 +260,9 @@ AdvertisedDevice* GetAdvertisedDevice(uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("GetAdvertisedDevice error: exception catched");
+		AddError("GetAdvertisedDevice error: exception caught");
 	}
-	
+
 	return nullptr;
 }
 
@@ -270,7 +270,7 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 {
 	if (eventArgs.AdvertisementType() == BluetoothLEAdvertisementType::NonConnectableUndirected) return;
 
-	try 
+	try
 	{
 		wstring localname = (wstring)eventArgs.Advertisement().LocalName();
 
@@ -301,7 +301,7 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 	}
 	catch (...)
 	{
-		AddError("OnAdvertisementReceived error: exception catched");
+		AddError("OnAdvertisementReceived error: exception caught");
 	}
 }
 
@@ -327,7 +327,7 @@ void timeoutThread()
 		}
 		catch (...)
 		{
-			AddError("timeoutThread error: exception catched");
+			AddError("timeoutThread error: exception caught");
 		}
 
 		for (int i = 0; i < 10 && threadRun; i++)
@@ -340,7 +340,7 @@ void timeoutThread()
 
 void StartDeviceScanAsync()
 {
-	try 
+	try
 	{
 		lock_guard lock(advertisedLock);
 		if (watcher == nullptr)
@@ -373,7 +373,7 @@ void StartDeviceScanAsync()
 	}
 	catch (...)
 	{
-		AddError("StartDeviceScanAsync error: exception catched");
+		AddError("StartDeviceScanAsync error: exception caught");
 	}
 }
 
@@ -383,15 +383,15 @@ DllExport void StartDeviceScan()
 	{
 		thread(StartDeviceScanAsync).detach();
 	}
-	catch(...)
+	catch (...)
 	{
-		AddError("StartDeviceScan error: exception catched");
+		AddError("StartDeviceScan error: exception caught");
 	}
 }
 
 void StopDeviceScanAsync()
 {
-	try 
+	try
 	{
 		lock_guard lock(advertisedLock);
 		if (watcher != nullptr)
@@ -404,8 +404,8 @@ void StopDeviceScanAsync()
 	}
 	catch (...)
 	{
-		AddError("StopDeviceScanAsync error: exception catched");
-	}	
+		AddError("StopDeviceScanAsync error: exception caught");
+	}
 }
 
 DllExport void StopDeviceScan()
@@ -416,14 +416,14 @@ DllExport void StopDeviceScan()
 	}
 	catch (...)
 	{
-		AddError("StopDeviceScan error: exception catched");
+		AddError("StopDeviceScan error: exception caught");
 	}
 }
 
 DllExport bool PollAdvertisedDevices(Device* device, bool first)
 {
 	if (device == nullptr)return false;
-	try 
+	try
 	{
 		lock_guard lock(advertisedLock);
 		static uint16_t currentIndex = 0;
@@ -445,7 +445,7 @@ DllExport bool PollAdvertisedDevices(Device* device, bool first)
 	}
 	catch (...)
 	{
-		AddError("PollAdvertisedDevices error: exception catched");
+		AddError("PollAdvertisedDevices error: exception caught");
 		return false;
 	}
 
@@ -454,7 +454,7 @@ DllExport bool PollAdvertisedDevices(Device* device, bool first)
 
 void CleanAdvertisedDevicesAsync()
 {
-	try 
+	try
 	{
 		lock_guard lock(advertisedLock);
 		for (AdvertisedDevice* advDev : advertisedDevices)
@@ -466,27 +466,27 @@ void CleanAdvertisedDevicesAsync()
 	}
 	catch (...)
 	{
-		AddError("CleanAdvertisedDevicesAsync error: exception catched");
+		AddError("CleanAdvertisedDevicesAsync error: exception caught");
 	}
 }
 
 DllExport void CleanAdvertisedDevices()
 {
-	try 
+	try
 	{
 		thread(CleanAdvertisedDevices).detach();
 	}
 	catch (...)
 	{
-		AddError("CleanAdvertisedDevices error: exception catched");
+		AddError("CleanAdvertisedDevices error: exception caught");
 	}
 }
 
 DllExport bool IsDeviceConnectable(const wchar_t* deviceName)
 {
 	if (deviceName == nullptr)return false;
-	
-	try 
+
+	try
 	{
 		lock_guard lock(advertisedLock);
 		for (AdvertisedDevice* advDev : advertisedDevices)
@@ -499,7 +499,7 @@ DllExport bool IsDeviceConnectable(const wchar_t* deviceName)
 	}
 	catch (...)
 	{
-		AddError("IsDeviceConnectable error: exception catched");
+		AddError("IsDeviceConnectable error: exception caught");
 	}
 	return false;
 }
@@ -507,7 +507,7 @@ DllExport bool IsDeviceConnectable(const wchar_t* deviceName)
 DllExport uint64_t GetDeviceAddress(const wchar_t* deviceName)
 {
 	if (deviceName == nullptr)return 0;
-	try 
+	try
 	{
 		lock_guard lock(advertisedLock);
 		for (AdvertisedDevice* advDev : advertisedDevices)
@@ -520,7 +520,7 @@ DllExport uint64_t GetDeviceAddress(const wchar_t* deviceName)
 	}
 	catch (...)
 	{
-		AddError("GetDeviceAddress error: exception catched");
+		AddError("GetDeviceAddress error: exception caught");
 	}
 	return 0;
 }
@@ -548,7 +548,7 @@ DllExport bool GetDevice(Device* odev, uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("GetDeviceAddress error: exception catched in advertisment");
+		AddError("GetDeviceAddress error: exception caught in advertisment");
 	}
 
 	try
@@ -567,7 +567,7 @@ DllExport bool GetDevice(Device* odev, uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("GetDeviceAddress error: exception catched in devices");
+		AddError("GetDeviceAddress error: exception caught in devices");
 	}
 
 	return false;
@@ -589,14 +589,14 @@ ConnectedDevice* GetDevice(uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("GetDevice error: exception catched");
+		AddError("GetDevice error: exception caught");
 	}
 	return nullptr;
 }
 
 void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj)
 {
-	try 
+	try
 	{
 		lock_guard lock(connectedLock);
 		ConnectedDevice* device = GetDevice(dev.BluetoothAddress());
@@ -626,15 +626,15 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 	}
 	catch (...)
 	{
-		AddError("ConnectionStatusChangedEvent error: exception catched");
+		AddError("ConnectionStatusChangedEvent error: exception caught");
 	}
 }
 
 bool ConnectDeviceAsync(uint64_t deviceAddress)
 {
 	if (deviceAddress == 0) return false;
-	
-	try 
+
+	try
 	{
 		lock_guard lock(connectedLock);
 		ConnectedDevice* device = GetDevice(deviceAddress);
@@ -663,21 +663,21 @@ bool ConnectDeviceAsync(uint64_t deviceAddress)
 			else
 			{
 				wstring w = (wstring)device->leDev.Name();
-				wcscpy_s(device->dev.name, sizeof(w.c_str()) / sizeof(wchar_t), w.c_str());
+				wcscpy_s(device->dev.name, w.length(), w.c_str());
 			}
+			return true;
 		}
 		else
 		{
 			AddEvent(device->dev, What::DEVICE_DISCONNECTED);
 			DisconnectDevice(device);
 			delete device;
+			return false;
 		}
-
-		return device->isConnected;
 	}
 	catch (...)
 	{
-		AddError("ConnectDeviceAsync error: exception catched");
+		AddError("ConnectDeviceAsync error: exception caught");
 	}
 	return false;
 }
@@ -685,7 +685,7 @@ bool ConnectDeviceAsync(uint64_t deviceAddress)
 DllExport bool ConnectDevice(uint64_t deviceAddress, bool block)
 {
 	if (deviceAddress == 0)return false;
-	try 
+	try
 	{
 		if (block)
 		{
@@ -698,16 +698,16 @@ DllExport bool ConnectDevice(uint64_t deviceAddress, bool block)
 	}
 	catch (...)
 	{
-		AddError("ConnectDevice error: exception catched");
+		AddError("ConnectDevice error: exception caught");
 	}
-	
+
 	return true;
 }
 
 void DisconnectDevice(ConnectedDevice* device)
 {
 	if (device == nullptr) return;
-	try 
+	try
 	{
 		device->isConnected = false;
 		device->leDev.Close();
@@ -718,23 +718,23 @@ void DisconnectDevice(ConnectedDevice* device)
 			sub->revoker.revoke();
 			delete sub;
 		}
-		device->subscriptions.clear();		
+		device->subscriptions.clear();
 	}
-	catch (...) 
+	catch (...)
 	{
-		AddError("ConnectionStatusChangedEvent error: exception catched");
+		AddError("ConnectionStatusChangedEvent error: exception caught");
 	}
 }
 
 void DisconnectDeviceAsync(uint64_t deviceAddress)
 {
 	if (deviceAddress == 0) return;
-	try 
+	try
 	{
 		lock_guard lock(connectedLock);
 		ConnectedDevice* device = GetDevice(deviceAddress);
 		if (device != nullptr)
-		{	
+		{
 			DisconnectDevice(device);
 			AddEvent(device->dev, What::DEVICE_DISCONNECTED);
 			devices.remove(device);
@@ -742,22 +742,22 @@ void DisconnectDeviceAsync(uint64_t deviceAddress)
 			return;
 		}
 	}
-	catch(...)
+	catch (...)
 	{
-		AddError("DisconnectDeviceAsync error: exception catched");
+		AddError("DisconnectDeviceAsync error: exception caught");
 	}
 }
 
 DllExport void DisconnectDevice(uint64_t deviceAddress)
 {
 	if (deviceAddress == 0)return;
-	try 
+	try
 	{
 		thread(DisconnectDeviceAsync, deviceAddress).detach();
 	}
 	catch (...)
 	{
-		AddError("DisconnectDevice error: exception catched");
+		AddError("DisconnectDevice error: exception caught");
 	}
 }
 
@@ -775,9 +775,9 @@ DllExport bool IsDeviceConnected(uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("IsDeviceConnected error: exception catched");
+		AddError("IsDeviceConnected error: exception caught");
 	}
-	
+
 	return false;
 }
 
@@ -786,7 +786,7 @@ DllExport bool IsDeviceConnected(uint64_t deviceAddress)
 GattCharacteristic FindCharacteristic(ConnectedDevice* dev, wstring t_uuid)
 {
 	if (dev == nullptr)return nullptr;
-	try 
+	try
 	{
 		transform(t_uuid.begin(), t_uuid.end(), t_uuid.begin(), towlower);
 
@@ -814,7 +814,7 @@ GattCharacteristic FindCharacteristic(ConnectedDevice* dev, wstring t_uuid)
 	}
 	catch (...)
 	{
-		AddError("FindCharacteristic error: exception catched");
+		AddError("FindCharacteristic error: exception caught");
 		return nullptr;
 	}
 
@@ -826,7 +826,7 @@ bool DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, wchar_t* string)
 {
 	if (deviceAddress == 0)return false;
 	if (uuid == nullptr)return false;
-	try 
+	try
 	{
 		lock_guard lock(connectedLock);
 		ConnectedDevice* device = GetDevice(deviceAddress);
@@ -853,7 +853,7 @@ bool DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, wchar_t* string)
 	}
 	catch (...)
 	{
-		AddError("DeviceWriteAsync error: exception catched");
+		AddError("DeviceWriteAsync error: exception caught");
 	}
 
 	AddEvent(What::CHARACTERISTIC_NOT_WRITTEN);
@@ -876,9 +876,9 @@ DllExport bool DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, wchar_t* strin
 	}
 	catch (...)
 	{
-		AddError("DeviceWrite error: exception catched");
+		AddError("DeviceWrite error: exception caught");
 	}
-	
+
 	return false;
 }
 
@@ -914,7 +914,7 @@ bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 				{
 					sub->revoker = sub->characteristic.ValueChanged(auto_revoke, [device](const GattCharacteristic&, const GattValueChangedEventArgs& args)
 						{
-							try 
+							try
 							{
 								Data cd;
 								cd.size = args.CharacteristicValue().Length();
@@ -926,9 +926,9 @@ bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 							}
 							catch (...)
 							{
-								AddError("DeviceSubscribeAsync ValueChanged error: exception catched");
+								AddError("DeviceSubscribeAsync ValueChanged error: exception caught");
 							}
-							
+
 							return;
 						});
 
@@ -946,7 +946,7 @@ bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 	}
 	catch (...)
 	{
-		AddError("DeviceSubscribeAsync error: exception catched");
+		AddError("DeviceSubscribeAsync error: exception caught");
 	}
 	AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED);
 	return false;
@@ -956,7 +956,7 @@ DllExport bool DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid, bool block
 {
 	if (deviceAddress == 0)return false;
 	if (uuid == nullptr)return false;
-	try 
+	try
 	{
 		if (block)
 		{
@@ -969,7 +969,7 @@ DllExport bool DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid, bool block
 	}
 	catch (...)
 	{
-		AddError("DeviceSubscribe error: exception catched");
+		AddError("DeviceSubscribe error: exception caught");
 	}
 	return false;
 }
@@ -978,8 +978,8 @@ DllExport bool PollNotifications(Data* n, uint64_t deviceAddress)
 {
 	if (deviceAddress == 0) return false;
 	if (n == nullptr) return false;
-	
-	try 
+
+	try
 	{
 		n->size = 0;
 
@@ -1002,7 +1002,7 @@ DllExport bool PollNotifications(Data* n, uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("PollNotifications error: exception catched");
+		AddError("PollNotifications error: exception caught");
 	}
 
 	return false;
@@ -1013,7 +1013,7 @@ DllExport bool PollNotifications(Data* n, uint64_t deviceAddress)
 DllExport void Clean()
 {
 	StopDeviceScanAsync();
-	try 
+	try
 	{
 		{
 			lock_guard lock(advertisedLock);
@@ -1021,7 +1021,6 @@ DllExport void Clean()
 			//watcherRevoker.revoke();
 			for (AdvertisedDevice* advDevice : advertisedDevices)
 			{
-				//AddEvent(advDevice->dev, What::DISCOVERED_REMOVED);
 				delete advDevice;
 			}
 			advertisedDevices.clear();
@@ -1048,6 +1047,6 @@ DllExport void Clean()
 	}
 	catch (...)
 	{
-		AddError("Clean error: exception catched");
+		AddError("Clean error: exception caught");
 	}
 }

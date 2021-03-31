@@ -7,7 +7,7 @@
 #define LOST_TIMEOUT_MS 10000
 
 // Enum
-enum class What 
+enum class What
 {
 	LIBRARY_ERROR,
 	LIBRARY_NOTHING,
@@ -26,19 +26,19 @@ enum class What
 };
 
 // Structures
-struct Device 
+struct Device
 {
-	uint64_t address;
-	wchar_t name[50];
+	uint64_t address = 0;
+	wchar_t name[50] = L"";
 };
 
-struct Event 
+struct Event
 {
-	What what;
+	What what = What::LIBRARY_NOTHING;
 	Device who;
 };
 
-struct Data 
+struct Data
 {
 	uint8_t buf[512];
 	uint16_t size;

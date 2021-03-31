@@ -72,7 +72,8 @@ public class BleApi
         [MarshalAs(UnmanagedType.I2)]
         public short size;
     }
-    
+
+
     // Functions
     [DllImport("BluetoothLowEnergyApi.dll")]
     public static extern bool PollErrors(out Data err);
@@ -147,6 +148,4 @@ public class BleApi
     {
         Clean();
     }
-  
 }
-
