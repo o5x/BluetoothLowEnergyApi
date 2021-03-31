@@ -50,6 +50,12 @@ namespace BluetoothLowEnergyApiTest
                                 BleApi.ConnectDevice(btEvent.who.address);
                             }
                             break;
+                        case BleApi.What.DEVICE_LOST:
+                            if(BleApi.IsDeviceConnectable(btEvent.who.name))
+                            {
+                                BleApi.ConnectDevice(btEvent.who.address); // Hello World !
+                            }
+                            break;
                         case BleApi.What.DEVICE_CONNECTED:      // When device is connected
                             BleApi.DeviceWrite(btEvent.who.address, devCharacteristic, "@");
                             BleApi.DeviceSubscribe(btEvent.who.address, devCharacteristic);
