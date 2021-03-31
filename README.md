@@ -27,7 +27,7 @@ This project is based on [UWP BLE API](https://docs.microsoft.com/de-de/windows/
 
 The interface is done in C#, you can easily translate to any other language.
 
-Copy [BluetoothLowEnergyApiTest\BleApi.cs](BluetoothLowEnergyApiTest\BleApi.cs) and [BluetoothLowEnergyApiTest\BluetoothLowEnergyApi.dll](BluetoothLowEnergyApiTest\BluetoothLowEnergyApi.dll), and use the BleApi class as static to interface with bluetooth devices (sample code available in [BluetoothLowEnergyApiTest\Program.cs](BluetoothLowEnergyApiTest\Program.cs)) used in [Test](#Test) section
+Copy [BluetoothLowEnergyApiTest/BleApi.cs](BluetoothLowEnergyApiTest/BleApi.cs) and [BluetoothLowEnergyApiTest/BluetoothLowEnergyApi.dll](BluetoothLowEnergyApiTest/BluetoothLowEnergyApi.dll), and use the BleApi class as static to interface with bluetooth devices (sample code available in [BluetoothLowEnergyApiTest/Program.cs](BluetoothLowEnergyApiTest/Program.cs)) used in [Test](#Test) section
 
 ## Code 
 
@@ -109,14 +109,14 @@ void Clean();
 
 ## Build
 
-There is a prebuild dll included [BluetoothLowEnergyApiTest\BluetoothLowEnergyApi.dll](BluetoothLowEnergyApiTest\BluetoothLowEnergyApi.dll).
+There is a prebuild dll included [BluetoothLowEnergyApiTest/BluetoothLowEnergyApi.dll](BluetoothLowEnergyApiTest/BluetoothLowEnergyApi.dll).
 You also build it yourself by following these steps :
 - Open the solution file BluetoothLowEnergyApi.sln with VisualStudio (tested with Community 2019). You may be asked install VisualStudio components when you open the project. The needed components are C++ Desktop and UWP.
 - Choose configuration "Release" and "x64" (to match your machine architecture).
 - In the project explorer, right-click the project "BluetoothLowEnergyApi" and choose "Compile".
 - Wait until the compilation finishes successfully.
 
-Now you find the file BluetoothLowEnergyApi.dll in the folder x64/Release. You can copy this dll where you need it. It also automatically copy the dll in `BluetoothLowEnergyApiTest\`
+Now you find the file BluetoothLowEnergyApi.dll in the folder x64/Release. You can copy this dll where you need it. It also automatically copy the dll in `BluetoothLowEnergyApiTest/`
 
 ## Test
 
