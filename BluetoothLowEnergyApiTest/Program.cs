@@ -65,6 +65,7 @@ namespace BluetoothLowEnergyApiTest
                             {
                                 string result = System.Text.Encoding.UTF8.GetString(data.buf).Substring(0, data.size);
                                 Console.WriteLine("notification[" + data.size + "] = " + result);
+                                BleApi.DisconnectDevice(devAddr);
                             }
                             break;
                         case BleApi.What.LIBRARY_ERROR:

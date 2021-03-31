@@ -605,14 +605,22 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 		{
 			if (dev.ConnectionStatus() != BluetoothConnectionStatus::Connected)
 			{
-				device->isConnected = false;
 				DisconnectDevice(device);
-				delete device;
+				AddEvent(device->dev, What::DEVICE_LOST);
 				devices.remove(device);
+				delete device;
 			}
 			else
 			{
 				AddEvent(device->dev, What::DEVICE_CONNECTED);
+				lock_guard lock2(advertisedLock);
+				AdvertisedDevice* advDev = GetAdvertisedDevice(device->dev.address);
+				if (advDev != nullptr)
+				{
+					AddEvent(advDev->dev, What::DISCOVERED_REMOVED);
+					advertisedDevices.remove(advDev);
+					delete advDev;
+				}
 			}
 		}
 	}
@@ -646,22 +654,25 @@ bool ConnectDeviceAsync(uint64_t deviceAddress)
 			devices.push_back(device);
 
 			// gather name Remove from advertisments
+			lock_guard lock2(advertisedLock);
 			AdvertisedDevice* advDev = GetAdvertisedDevice(deviceAddress);
 			if (advDev != nullptr)
 			{
 				wcscpy_s(device->dev.name, sizeof(advDev->dev.name) / sizeof(wchar_t), advDev->dev.name);
-				AddEvent(advDev->dev, What::DISCOVERED_REMOVED);
-				advertisedDevices.remove(advDev);
 			}
 			else
 			{
 				wstring w = (wstring)device->leDev.Name();
 				wcscpy_s(device->dev.name, sizeof(w.c_str()) / sizeof(wchar_t), w.c_str());
-				AddEvent(advDev->dev, What::DISCOVERED_REMOVED);
-				advertisedDevices.remove(advDev);
 			}
-			delete advDev;
 		}
+		else
+		{
+			AddEvent(device->dev, What::DEVICE_DISCONNECTED);
+			DisconnectDevice(device);
+			delete device;
+		}
+
 		return device->isConnected;
 	}
 	catch (...)
@@ -698,15 +709,6 @@ void DisconnectDevice(ConnectedDevice* device)
 	if (device == nullptr) return;
 	try 
 	{
-		if (device->isConnected)
-		{
-			AddEvent(device->dev, What::DEVICE_DISCONNECTED);
-		}
-		else
-		{
-			AddEvent(device->dev, What::DEVICE_LOST);
-		}
-
 		device->isConnected = false;
 		device->leDev.Close();
 		device->revoker.revoke();
@@ -716,7 +718,7 @@ void DisconnectDevice(ConnectedDevice* device)
 			sub->revoker.revoke();
 			delete sub;
 		}
-		device->subscriptions.clear();
+		device->subscriptions.clear();		
 	}
 	catch (...) 
 	{
@@ -732,9 +734,10 @@ void DisconnectDeviceAsync(uint64_t deviceAddress)
 		lock_guard lock(connectedLock);
 		ConnectedDevice* device = GetDevice(deviceAddress);
 		if (device != nullptr)
-		{
+		{	
 			DisconnectDevice(device);
 			AddEvent(device->dev, What::DEVICE_DISCONNECTED);
+			devices.remove(device);
 			delete device;
 			return;
 		}
@@ -933,6 +936,7 @@ bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 					AddEvent(device->dev, What::CHARACTERISTIC_SUBSCRIBED);
 					return true;
 				}
+				delete sub;
 				AddEvent(device->dev, What::CHARACTERISTIC_NOT_SUBSCRIBED);
 				return false;
 			}
@@ -1017,7 +1021,7 @@ DllExport void Clean()
 			//watcherRevoker.revoke();
 			for (AdvertisedDevice* advDevice : advertisedDevices)
 			{
-				AddEvent(advDevice->dev, What::DISCOVERED_REMOVED);
+				//AddEvent(advDevice->dev, What::DISCOVERED_REMOVED);
 				delete advDevice;
 			}
 			advertisedDevices.clear();
@@ -1029,7 +1033,6 @@ DllExport void Clean()
 				DisconnectDevice(device);
 				delete device;
 			}
-
 			devices.clear();
 		}
 		{
