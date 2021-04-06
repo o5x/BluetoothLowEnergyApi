@@ -14,36 +14,44 @@ using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation::Collections;
 
 // Local structures and prototypes
-struct Subscription
-{
+struct ConnectedCharacteristic : Characteristic {
 	GattCharacteristic characteristic = nullptr;
-	GattCharacteristic::ValueChanged_revoker revoker;
 };
 
-struct AdvertisedDevice
+struct ConnectedSubscription
 {
-	Device dev;
+	ConnectedCharacteristic* characteristic = nullptr;
+	GattCharacteristic::ValueChanged_revoker revoker;
+	queue<Data> notificationQueue;
+};
+
+struct AdvertisedDevice : Device
+{
 	chrono::steady_clock::time_point lastAdvertisment;
 };
 
 wstring addrToString(uint64_t addr);
 
-struct ConnectedDevice
+
+
+struct ConnectedDevice : Device
 {
-	Device dev;
 	BluetoothLEDevice leDev = nullptr;
 	GattDeviceServicesResult result = nullptr;
 	BluetoothLEDevice::ConnectionStatusChanged_revoker revoker;
-	list<Subscription*> subscriptions;
+	list<ConnectedSubscription*> subscriptions;
+	list<ConnectedCharacteristic*> characteristics;
+	int characteristicPollIndex = 0;
 	bool isConnected = false;
-	queue<Data> notificationQueue;
 	wstring print()
 	{
-		return addrToString(dev.address) + L" " + (leDev.Name().size() ? wstring(leDev.Name()) : L"");
+		return addrToString(address) + L" " + (leDev.Name().size() ? wstring(leDev.Name()) : L"");
 	}
 };
 
+void ScanCharacteristicsAsync(ConnectedDevice* device);
 void DisconnectDevice(ConnectedDevice* device);
+void AddEvent(Device device, What what, Characteristic *c);
 void AddEvent(Device device, What what);
 void AddEvent(What what);
 
@@ -53,6 +61,9 @@ queue<Data> errors;
 
 mutex eventsLock;
 queue<Event> events;
+
+mutex callbackLock;
+bool (*eventCallback)(Event ev) = nullptr;
 
 mutex advertisedLock;
 list<AdvertisedDevice*> advertisedDevices;
@@ -64,6 +75,7 @@ thread _timeoutThread;
 
 mutex connectedLock;
 list<ConnectedDevice*> devices;
+
 
 // Function - Convert address to string
 
@@ -165,7 +177,12 @@ DllExport bool PollEvents(Event* ev)
 	return false;
 }
 
-void AddEventAsync(Device device, What what)
+void eventCallbackAsync(Event ev)
+{
+	eventCallback(ev);
+}
+
+void AddEventAsync(Device device, What what, Characteristic * c)
 {
 	try
 	{
@@ -173,8 +190,34 @@ void AddEventAsync(Device device, What what)
 		cb.who = device;
 		cb.what = what;
 
-		lock_guard lock(eventsLock);
-		events.push(cb);
+		if (c != nullptr)
+		{
+			cb.characteristic = *c;
+
+
+			//wcscpy_s(cb.characteristic.uuid, sizeof(cb.characteristic.uuid) / sizeof(wchar_t), c->uuid);
+			//cb.characteristic.isService = c->isService;
+			//wcout << "thisisfrom" << c->isService << endl;
+			//wcout << "thisisfrom" << cb.characteristic.isService << endl;
+		}
+		
+
+		lock_guard lock(callbackLock);
+		lock_guard lock2(eventsLock);
+		if (eventCallback)	// if callback setup use it
+		{	
+			thread(eventCallbackAsync, cb).detach();
+			while (!events.empty()) // if there was events waiting before setting up the callback
+			{
+				thread(eventCallbackAsync, events.front()).detach();
+				events.pop();
+			}
+		}
+		else
+		{
+			//otherwise store in queue for polling
+			events.push(cb);
+		}
 	}
 	catch (...)
 	{
@@ -182,11 +225,56 @@ void AddEventAsync(Device device, What what)
 	}
 }
 
+DllExport bool setEventCallback(bool (*callback)(Event ev))
+{
+	try
+	{
+		{
+			lock_guard lock(callbackLock);
+			eventCallback = callback;
+		}
+		AddEvent(What::LIBRARY_CALLBACK_SETUP); // used to callback all previous events not polled
+	}
+	catch (...)
+	{
+		AddError("setEventCallback error: exception caught");
+	}
+
+	return false;
+}
+
+DllExport bool removeEventCallback()
+{
+	try
+	{
+		lock_guard lock(callbackLock);
+		eventCallback = nullptr;
+		return true;
+	}
+	catch (...)
+	{
+		AddError("setEventCallback error: exception caught");
+	}
+	return false;
+}
+
+void AddEvent(Device device, What what, Characteristic *c)
+{
+	try
+	{
+		thread(AddEventAsync, device, what, c).detach();
+	}
+	catch (...)
+	{
+		//AddError("AddEvent(Device device, What what) error: exception caught");
+	}
+}
+
 void AddEvent(Device device, What what)
 {
 	try
 	{
-		thread(AddEventAsync, device, what).detach();
+		thread(AddEventAsync, device, what, nullptr).detach();
 	}
 	catch (...)
 	{
@@ -201,7 +289,7 @@ void AddEvent(What what)
 		Device odev;
 		odev.address = 0;
 		odev.name[0] = 0;
-		thread(AddEventAsync, odev, what).detach();
+		thread(AddEventAsync, odev, what, nullptr).detach();
 	}
 	catch (...)
 	{
@@ -252,7 +340,7 @@ AdvertisedDevice* GetAdvertisedDevice(uint64_t deviceAddress)
 	{
 		for (AdvertisedDevice* device : advertisedDevices)
 		{
-			if (device->dev.address == deviceAddress)
+			if (device->address == deviceAddress)
 			{
 				return device;
 			}
@@ -268,7 +356,7 @@ AdvertisedDevice* GetAdvertisedDevice(uint64_t deviceAddress)
 
 void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothLEAdvertisementReceivedEventArgs eventArgs)
 {
-	if (eventArgs.AdvertisementType() == BluetoothLEAdvertisementType::NonConnectableUndirected) return;
+	if (eventArgs.AdvertisementType() == BluetoothLEAdvertisementType::NonConnectableUndirected) return;	
 
 	try
 	{
@@ -280,22 +368,22 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 
 		if (advertisedDevice != nullptr)
 		{
-			if (localname.length() && wstring(advertisedDevice->dev.name) != localname)
+			if (localname.length() && wstring(advertisedDevice->name) != localname)
 			{
-				wcscpy_s(advertisedDevice->dev.name, sizeof(localname) / sizeof(wchar_t), localname.c_str());
+				wcscpy_s(advertisedDevice->name, sizeof(advertisedDevice->name) / sizeof(wchar_t), localname.c_str());
 				//wcout << L" - update " << advertisedDevice.print() << endl;
-				AddEvent(advertisedDevice->dev, What::DISCOVERED_UPDATED);
+				AddEvent(*advertisedDevice, What::DISCOVERED_UPDATED);
 			}
 			advertisedDevice->lastAdvertisment = std::chrono::steady_clock::now();
 			return;
 		}
 
 		advertisedDevice = new AdvertisedDevice;
-		advertisedDevice->dev.address = eventArgs.BluetoothAddress();
-		wcscpy_s(advertisedDevice->dev.name, sizeof(localname) / sizeof(wchar_t), localname.c_str());
+		advertisedDevice->address = eventArgs.BluetoothAddress();
+		wcscpy_s(advertisedDevice->name, sizeof(advertisedDevice->name) / sizeof(wchar_t), localname.c_str());
 		//wcout << L" - add " << advertisedDevice->print() << endl;
 		advertisedDevice->lastAdvertisment = std::chrono::steady_clock::now();
-		AddEvent(advertisedDevice->dev, What::DISCOVERED_NEW);
+		AddEvent(*advertisedDevice, What::DISCOVERED_NEW);
 
 		advertisedDevices.push_back(advertisedDevice);
 	}
@@ -318,7 +406,7 @@ void timeoutThread()
 			{
 				if (std::chrono::duration_cast<std::chrono::milliseconds>(t - advertisedDevice->lastAdvertisment).count() > LOST_TIMEOUT_MS)
 				{
-					AddEvent(advertisedDevice->dev, What::DISCOVERED_LOST);
+					AddEvent(*advertisedDevice, What::DISCOVERED_LOST);
 					advertisedDevices.remove(advertisedDevice);
 					delete advertisedDevice;
 					break;
@@ -353,11 +441,21 @@ void StartDeviceScanAsync()
 			watcher.SignalStrengthFilter().InRangeThresholdInDBm(-70);
 			watcher.SignalStrengthFilter().OutOfRangeThresholdInDBm(-75);
 			watcher.SignalStrengthFilter().OutOfRangeTimeout(TimeSpan::duration(2000));
+
+			if(0) // Filter Advertisment
+			{
+				BluetoothLEManufacturerData manufacturerData;
+				manufacturerData.CompanyId(0xFFFE);
+				//DataWriter dw;
+				//dw.WriteString(L"Neurinnov");
+				//manufacturerData.Data(dw.DetachBuffer());
+				watcher.AdvertisementFilter().Advertisement().ManufacturerData().Append(manufacturerData);
+			}
 		}
 
 		for (AdvertisedDevice* advertisedDevice : advertisedDevices)
 		{
-			AddEvent(advertisedDevice->dev, What::DISCOVERED_REMOVED);
+			AddEvent(*advertisedDevice, What::DISCOVERED_REMOVED);
 			delete advertisedDevice;
 		}
 		advertisedDevices.clear();
@@ -436,8 +534,8 @@ DllExport bool PollAdvertisedDevices(Device* device, bool first)
 			{
 				list<AdvertisedDevice*>::iterator it = advertisedDevices.begin();
 				advance(it, currentIndex);
-				wcscpy_s(device->name, sizeof((*it)->dev.name) / sizeof(wchar_t), (*it)->dev.name);
-				device->address = (*it)->dev.address;
+				wcscpy_s(device->name, sizeof(device->name) / sizeof(wchar_t), (*it)->name);
+				device->address = (*it)->address;
 				currentIndex++;
 				return true;
 			}
@@ -459,7 +557,7 @@ void CleanAdvertisedDevicesAsync()
 		lock_guard lock(advertisedLock);
 		for (AdvertisedDevice* advDev : advertisedDevices)
 		{
-			AddEvent(advDev->dev, What::DISCOVERED_REMOVED);
+			AddEvent(*advDev, What::DISCOVERED_REMOVED);
 			delete advDev;
 		}
 		advertisedDevices.clear();
@@ -491,7 +589,7 @@ DllExport bool IsDeviceConnectable(const wchar_t* deviceName)
 		lock_guard lock(advertisedLock);
 		for (AdvertisedDevice* advDev : advertisedDevices)
 		{
-			if (!wcscmp(advDev->dev.name, deviceName))
+			if (!wcscmp(advDev->name, deviceName))
 			{
 				return true;
 			}
@@ -512,9 +610,9 @@ DllExport uint64_t GetDeviceAddress(const wchar_t* deviceName)
 		lock_guard lock(advertisedLock);
 		for (AdvertisedDevice* advDev : advertisedDevices)
 		{
-			if (!wcscmp(advDev->dev.name, deviceName))
+			if (!wcscmp(advDev->name, deviceName))
 			{
-				return advDev->dev.address;
+				return advDev->address;
 			}
 		}
 	}
@@ -538,10 +636,10 @@ DllExport bool GetDevice(Device* odev, uint64_t deviceAddress)
 		lock_guard lock(advertisedLock);
 		for (AdvertisedDevice* advDev : advertisedDevices)
 		{
-			if (advDev->dev.address == deviceAddress)
+			if (advDev->address == deviceAddress)
 			{
-				*odev = advDev->dev;
-				advDev->dev.address = deviceAddress;
+				*odev = *advDev;
+				advDev->address = deviceAddress;
 				return true;
 			}
 		}
@@ -556,11 +654,11 @@ DllExport bool GetDevice(Device* odev, uint64_t deviceAddress)
 		lock_guard lock(connectedLock);
 		for (ConnectedDevice* dev : devices)
 		{
-			if (dev->dev.address == deviceAddress)
+			if (dev->address == deviceAddress)
 			{
 				odev->address = deviceAddress;
-				int size = sizeof(dev->dev.name) / sizeof(wchar_t);
-				wcscpy_s(odev->name, size, dev->dev.name);
+				int size = sizeof(dev->name) / sizeof(wchar_t);
+				wcscpy_s(odev->name, sizeof(odev->name) / sizeof(wchar_t), dev->name);
 				return true;
 			}
 		}
@@ -581,7 +679,7 @@ ConnectedDevice* GetDevice(uint64_t deviceAddress)
 	{
 		for (ConnectedDevice* device : devices)
 		{
-			if (device->dev.address == deviceAddress)
+			if (device->address == deviceAddress)
 			{
 				return device;
 			}
@@ -606,18 +704,18 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 			if (dev.ConnectionStatus() != BluetoothConnectionStatus::Connected)
 			{
 				DisconnectDevice(device);
-				AddEvent(device->dev, What::DEVICE_LOST);
+				AddEvent(*device, What::DEVICE_LOST);
 				devices.remove(device);
 				delete device;
 			}
 			else
 			{
-				AddEvent(device->dev, What::DEVICE_CONNECTED);
+				AddEvent(*device, What::DEVICE_CONNECTED);
 				lock_guard lock2(advertisedLock);
-				AdvertisedDevice* advDev = GetAdvertisedDevice(device->dev.address);
+				AdvertisedDevice* advDev = GetAdvertisedDevice(device->address);
 				if (advDev != nullptr)
 				{
-					AddEvent(advDev->dev, What::DISCOVERED_REMOVED);
+					AddEvent(*advDev, What::DISCOVERED_REMOVED);
 					advertisedDevices.remove(advDev);
 					delete advDev;
 				}
@@ -642,8 +740,8 @@ bool ConnectDeviceAsync(uint64_t deviceAddress)
 		if (device != nullptr) return device->isConnected;
 
 		device = new ConnectedDevice();
-		device->dev.address = deviceAddress;
-		device->leDev = BluetoothLEDevice::FromBluetoothAddressAsync(device->dev.address).get();
+		device->address = deviceAddress;
+		device->leDev = BluetoothLEDevice::FromBluetoothAddressAsync(device->address).get();
 		device->revoker = device->leDev.ConnectionStatusChanged(auto_revoke, ConnectionStatusChangedEvent);
 
 		device->result = device->leDev.GetGattServicesAsync(BluetoothCacheMode::Uncached).get();
@@ -658,18 +756,19 @@ bool ConnectDeviceAsync(uint64_t deviceAddress)
 			AdvertisedDevice* advDev = GetAdvertisedDevice(deviceAddress);
 			if (advDev != nullptr)
 			{
-				wcscpy_s(device->dev.name, sizeof(advDev->dev.name) / sizeof(wchar_t), advDev->dev.name);
+				wcscpy_s(device->name, sizeof(device->name) / sizeof(wchar_t), advDev->name);
 			}
 			else
 			{
 				wstring w = (wstring)device->leDev.Name();
-				wcscpy_s(device->dev.name, w.length(), w.c_str());
+				wcscpy_s(device->name, sizeof(device->name) / sizeof(wchar_t), w.c_str());
 			}
+			thread(ScanCharacteristicsAsync, device).detach();
 			return true;
 		}
 		else
 		{
-			AddEvent(device->dev, What::DEVICE_DISCONNECTED);
+			AddEvent(*device, What::DEVICE_DISCONNECTED);
 			DisconnectDevice(device);
 			delete device;
 			return false;
@@ -713,7 +812,7 @@ void DisconnectDevice(ConnectedDevice* device)
 		device->leDev.Close();
 		device->revoker.revoke();
 
-		for (Subscription* sub : device->subscriptions)
+		for (ConnectedSubscription* sub : device->subscriptions)
 		{
 			sub->revoker.revoke();
 			delete sub;
@@ -736,7 +835,7 @@ void DisconnectDeviceAsync(uint64_t deviceAddress)
 		if (device != nullptr)
 		{
 			DisconnectDevice(device);
-			AddEvent(device->dev, What::DEVICE_DISCONNECTED);
+			AddEvent(*device, What::DEVICE_DISCONNECTED);
 			devices.remove(device);
 			delete device;
 			return;
@@ -783,34 +882,43 @@ DllExport bool IsDeviceConnected(uint64_t deviceAddress)
 
 // Functions - Characteristics (for connected devices)
 
-GattCharacteristic FindCharacteristic(ConnectedDevice* dev, wstring t_uuid)
+ConnectedCharacteristic *FindCharacteristic(ConnectedDevice* dev, wstring t_uuid)
 {
 	if (dev == nullptr)return nullptr;
 	try
 	{
 		transform(t_uuid.begin(), t_uuid.end(), t_uuid.begin(), towlower);
-
-		wchar_t uuid[100];
-		IVectorView<GattDeviceService> services = dev->result.Services();
-		for (GattDeviceService service : services)
+		const wchar_t* str = t_uuid.c_str();
+		
+		for (list<ConnectedCharacteristic*>::iterator it = dev->characteristics.begin(); it != dev->characteristics.end(); it++)
 		{
-			//wcscpy_s(uuid, sizeof(uuid) / sizeof(wchar_t), to_hstring(service.Uuid()).c_str());
-			//wcout << uuid << endl;
-
-			IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
-
-			for (GattCharacteristic characteristic : characteristics)
+			if (!wcscmp(str, (*it)->uuid))
 			{
-				wcscpy_s(uuid, sizeof(uuid) / sizeof(wchar_t), to_hstring(characteristic.Uuid()).c_str());
-				if (wcslen(uuid) != t_uuid.length()) continue;
-				//wcout << "\t" << uuid << endl;
-
-				if (!wcscmp(t_uuid.c_str(), uuid))
-				{
-					return characteristic;
-				}
+				return (*it);
 			}
 		}
+
+		//wchar_t uuid[100];
+		//IVectorView<GattDeviceService> services = dev->result.Services();
+		//for (GattDeviceService service : services)
+		//{
+		//	//wcscpy_s(uuid, sizeof(uuid) / sizeof(wchar_t), to_hstring(service.Uuid()).c_str());
+		//	//wcout << uuid << endl;
+
+		//	IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
+
+		//	for (GattCharacteristic characteristic : characteristics)
+		//	{
+		//		wcscpy_s(uuid, sizeof(uuid) / sizeof(wchar_t), to_hstring(characteristic.Uuid()).c_str());
+		//		if (wcslen(uuid) != t_uuid.length()) continue;
+		//		//wcout << "\t" << uuid << endl;
+
+		//		if (!wcscmp(t_uuid.c_str(), uuid))
+		//		{
+		//			return characteristic;
+		//		}
+		//	}
+		//}
 	}
 	catch (...)
 	{
@@ -822,34 +930,42 @@ GattCharacteristic FindCharacteristic(ConnectedDevice* dev, wstring t_uuid)
 	return nullptr;
 }
 
-bool DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, wchar_t* string)
+bool DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, Data data)
 {
 	if (deviceAddress == 0)return false;
-	if (uuid == nullptr)return false;
+	if (uuid == nullptr) return false;
+	if (data.buf == nullptr)return false;
+
 	try
 	{
-		lock_guard lock(connectedLock);
-		ConnectedDevice* device = GetDevice(deviceAddress);
-
-		if (device != nullptr)
+		ConnectedDevice* device = nullptr;
 		{
-			GattCharacteristic characteristic = FindCharacteristic(device, uuid);
-			if (characteristic == nullptr)
-			{
-				AddEvent(device->dev, What::CHARACTERISTIC_NOT_WRITTEN);
-				return false;
-			}
-			auto writer = DataWriter();
-			writer.WriteString(string);
-			auto status = characteristic.WriteValueWithResultAsync(writer.DetachBuffer(), GattWriteOption::WriteWithoutResponse).get();
-			if (status.Status() == GattCommunicationStatus::Success)
-			{
-				AddEvent(device->dev, What::CHARACTERISTIC_WRITTEN);
-				return true;
-			}
-			AddEvent(device->dev, What::CHARACTERISTIC_NOT_WRITTEN);
+			lock_guard lock(connectedLock);
+			device = GetDevice(deviceAddress);
+			if (device == nullptr) return false;
+		}
+		
+		ConnectedCharacteristic* characteristic = FindCharacteristic(device, uuid);
+		if (characteristic == nullptr)
+		{
+			AddEvent(*device, What::CHARACTERISTIC_NOT_WRITTEN);
 			return false;
 		}
+
+		array_view<uint8_t> av(data.buf, data.size);
+
+		auto writer = DataWriter();
+		writer.WriteBytes(av);
+			
+		auto status = characteristic->characteristic.WriteValueWithResultAsync(writer.DetachBuffer(), GattWriteOption::WriteWithoutResponse).get();
+		if (status.Status() == GattCommunicationStatus::Success)
+		{
+			AddEvent(*device, What::CHARACTERISTIC_WRITTEN, characteristic);
+			return true;
+		}
+		AddEvent(*device, What::CHARACTERISTIC_NOT_WRITTEN);
+		return false;
+		
 	}
 	catch (...)
 	{
@@ -860,18 +976,19 @@ bool DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, wchar_t* string)
 	return false;
 }
 
-DllExport bool DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, wchar_t* string, bool block)
+DllExport bool DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data, bool block)
 {
 	if (deviceAddress == 0)return false;
 	try
 	{
+		// Sall we copy data ? -> probably (check if copy is enough)
 		if (block)
 		{
-			return DeviceWriteAsync(deviceAddress, uuid, string);
+			return DeviceWriteAsync(deviceAddress, uuid, *data);
 		}
 		else
 		{
-			thread(DeviceWriteAsync, deviceAddress, uuid, string).join();
+			thread(DeviceWriteAsync, deviceAddress, uuid, *data).join();
 		}
 	}
 	catch (...)
@@ -881,6 +998,54 @@ DllExport bool DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, wchar_t* strin
 
 	return false;
 }
+
+DllExport bool DeviceRead(uint64_t deviceAddress, wchar_t* uuid, Data* data)
+{
+	if (deviceAddress == 0)return false;
+	if (uuid == nullptr) return false;
+	if (data->buf == nullptr)return false;
+
+	try
+	{
+		ConnectedDevice* device = nullptr;
+		{
+			lock_guard lock(connectedLock);
+			device = GetDevice(deviceAddress);
+			if (device == nullptr) return false;
+		}
+
+		ConnectedCharacteristic* characteristic = FindCharacteristic(device, uuid);
+		if (characteristic == nullptr)
+		{
+			AddEvent(*device, What::CHARACTERISTIC_NOT_READED);
+			return false;
+		}
+
+		auto val = characteristic->characteristic.ReadValueAsync().get();
+
+		if (val.Status() != GattCommunicationStatus::Success)
+		{
+			return false;
+			AddEvent(*device, What::CHARACTERISTIC_NOT_READED);
+		}
+
+		data->size = val.Value().Length();
+
+		memcpy(data->buf, val.Value().data(), data->size);
+		data->buf[data->size] = '\0';
+
+		AddEvent(*device, What::CHARACTERISTIC_READED);
+		return true;
+	}
+	catch (...)
+	{
+		AddError("DeviceReadAsync error: exception caught");
+	}
+
+	AddEvent(What::CHARACTERISTIC_NOT_READED);
+	return false;
+}
+
 
 bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 {
@@ -892,27 +1057,34 @@ bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 
 		if (device != nullptr)
 		{
-			GattCharacteristic characteristic = FindCharacteristic(device, uuid);
+			ConnectedCharacteristic* characteristic = FindCharacteristic(device, uuid);
 
 			if (characteristic != nullptr)
 			{
 				// go trough subscriptions to check if existing
-				for (Subscription* sub : device->subscriptions)
+				for (ConnectedSubscription* sub : device->subscriptions)
 				{
-					if (sub->characteristic.Uuid() == characteristic.Uuid())
+					if (sub->characteristic->characteristic.Uuid() == characteristic->characteristic.Uuid())
 					{
 						return true;
 					}
 				}
 
-				Subscription* sub = new Subscription();
+
+				ConnectedSubscription* sub = new ConnectedSubscription();
+
 
 				sub->characteristic = characteristic;
-				GattCommunicationStatus status = sub->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::Notify).get();
+	
+
+				// TODO test 
+				// sub->characteristic->characteristic.ProtectionLevel(GattProtectionLevel::EncryptionRequired);
+
+				GattCommunicationStatus status = sub->characteristic->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::Notify).get();
 
 				if (status == GattCommunicationStatus::Success)
 				{
-					sub->revoker = sub->characteristic.ValueChanged(auto_revoke, [device](const GattCharacteristic&, const GattValueChangedEventArgs& args)
+					sub->revoker = sub->characteristic->characteristic.ValueChanged(auto_revoke, [device, sub](const GattCharacteristic&, const GattValueChangedEventArgs& args)
 						{
 							try
 							{
@@ -921,8 +1093,8 @@ bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 								memcpy(cd.buf, args.CharacteristicValue().data(), cd.size);
 								cd.buf[cd.size] = '\0';
 
-								device->notificationQueue.push(cd);
-								AddEvent(device->dev, What::CHARACTERISTIC_NOTIFICATION);
+								sub->notificationQueue.push(cd);
+								AddEvent(*device, What::CHARACTERISTIC_NOTIFICATION, sub->characteristic);
 							}
 							catch (...)
 							{
@@ -933,14 +1105,14 @@ bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 						});
 
 					device->subscriptions.push_back(sub);
-					AddEvent(device->dev, What::CHARACTERISTIC_SUBSCRIBED);
+					AddEvent(*device, What::CHARACTERISTIC_SUBSCRIBED, sub->characteristic);
 					return true;
 				}
 				delete sub;
-				AddEvent(device->dev, What::CHARACTERISTIC_NOT_SUBSCRIBED);
+				AddEvent(*device, What::CHARACTERISTIC_NOT_SUBSCRIBED);
 				return false;
 			}
-			AddEvent(device->dev, What::CHARACTERISTIC_NOT_SUBSCRIBED);
+			AddEvent(*device, What::CHARACTERISTIC_NOT_SUBSCRIBED);
 			return false;
 		}
 	}
@@ -974,7 +1146,7 @@ DllExport bool DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid, bool block
 	return false;
 }
 
-DllExport bool PollNotifications(Data* n, uint64_t deviceAddress)
+DllExport bool PollNotifications(Data* n, uint64_t deviceAddress, wchar_t * uuid)
 {
 	if (deviceAddress == 0) return false;
 	if (n == nullptr) return false;
@@ -989,20 +1161,112 @@ DllExport bool PollNotifications(Data* n, uint64_t deviceAddress)
 
 		if (dev == nullptr) return false;
 
-		if (!dev->notificationQueue.empty())
+		for (list<ConnectedSubscription*>::iterator i = dev->subscriptions.begin(); i != dev->subscriptions.end(); i++)
 		{
-			Data nn = dev->notificationQueue.front();
+			if (!wcscmp((*i)->characteristic->uuid, uuid))
+			{
+				if (!(*i)->notificationQueue.empty())
+				{
+					Data nn = (*i)->notificationQueue.front();
 
-			memcpy(n->buf, nn.buf, nn.size);
-			n->size = nn.size;
+					memcpy(n->buf, nn.buf, nn.size);
+					n->size = nn.size;
 
-			dev->notificationQueue.pop();
-			return true;
-		}
+					(*i)->notificationQueue.pop();
+					return true;
+				}
+
+			}
+		}	
 	}
 	catch (...)
 	{
 		AddError("PollNotifications error: exception caught");
+	}
+
+	return false;
+}
+
+void ScanCharacteristicsAsync(ConnectedDevice * dev)
+{
+	if (dev == nullptr) return;
+	try
+	{
+		{
+			lock_guard lock(connectedLock);
+			//std::queue<ConnectedCharacteristic> empty; // empty and clear pointers
+			//std::swap(dev->characteristicQueue, empty);
+		}
+		
+		IVectorView<GattDeviceService> services = dev->result.Services();
+		for (GattDeviceService service : services)
+		{
+			{
+				wstring uuidStr = (wstring)to_hstring(service.Uuid());
+				//wcout << "s" << uuidStr << endl;
+				ConnectedCharacteristic *current = new ConnectedCharacteristic(); 
+				current->isService = true;
+				//current.characteristic = 0;
+				wcscpy_s(current->uuid, sizeof(current->uuid) / sizeof(wchar_t) , uuidStr.c_str());
+				lock_guard lock(connectedLock);
+				dev->characteristics.push_back(current);
+			}
+			
+			IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
+
+			for (GattCharacteristic characteristic : characteristics)
+			{
+				wstring uuidStr = (wstring)to_hstring(characteristic.Uuid());
+				//wcout << "c" << uuidStr << endl;
+				ConnectedCharacteristic *current = new ConnectedCharacteristic(); 
+				current->isService = false;
+				current->characteristic = characteristic;
+				wcscpy_s(current->uuid, sizeof(current->uuid) / sizeof(wchar_t), uuidStr.c_str());
+				lock_guard lock(connectedLock);
+				dev->characteristics.push_back(current);
+			}
+		}
+		AddEvent(*dev, What::CHARACTERISTIC_SCANNED);
+	}
+	catch (...)
+	{
+		AddError("ScanCharacteristicsAsync error: exception caught");
+	}
+}
+
+bool PollCharacteristics(Characteristic* c, uint64_t deviceAddress, bool first)
+{
+	if (deviceAddress == 0) return false;
+	if (c == nullptr) return false;
+
+	try
+	{
+		lock_guard lock(connectedLock);
+
+		ConnectedDevice* dev = GetDevice(deviceAddress);
+
+		if (dev == nullptr) return false;
+
+		if (first) dev->characteristicPollIndex = 0;
+
+		for (size_t i = 0; i < dev->characteristics.size(); i++)
+		{
+			if (i == dev->characteristicPollIndex)
+			{
+				list<ConnectedCharacteristic*>::iterator it = dev->characteristics.begin();
+				advance(it, dev->characteristicPollIndex);
+
+				wcscpy_s(c->uuid, sizeof(c->uuid) / sizeof(wchar_t), (*it)->uuid);
+				c->isService = (*it)->isService;
+
+				dev->characteristicPollIndex++;
+				return true;
+			}
+		}
+	}
+	catch (...)
+	{
+		AddError("PollCharacteristics error: exception caught");
 	}
 
 	return false;
@@ -1043,6 +1307,10 @@ DllExport void Clean()
 			lock_guard lock3(eventsLock);
 			std::queue<Event> empty;
 			std::swap(events, empty);
+		}
+		{
+			lock_guard lock4(callbackLock);
+			eventCallback = nullptr;
 		}
 	}
 	catch (...)

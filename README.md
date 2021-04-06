@@ -14,14 +14,10 @@ This project is based on [UWP BLE API](https://docs.microsoft.com/de-de/windows/
 - Disconnect Bluetooth devices
 - Write data to characteristics
 - Subscribe / read from characteristics
-- Poll events
+- Poll or Callback on event
 - Detect if device is disconnected (lost)
 - Check if the device is bluetooth enabled
 - Error management
-
-### Not implemented (yet?)
-- List services / characterisctcs
-- Calback on events - there was an issue with Unity and Localization where the member function context changed and it was necessary to re-set the callback
 
 ## How to use
 
