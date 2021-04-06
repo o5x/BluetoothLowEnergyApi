@@ -14,7 +14,8 @@ using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation::Collections;
 
 // Local structures and prototypes
-struct ConnectedCharacteristic : Characteristic {
+struct ConnectedCharacteristic : Characteristic 
+{
 	GattCharacteristic characteristic = nullptr;
 };
 
@@ -22,7 +23,6 @@ struct ConnectedSubscription
 {
 	ConnectedCharacteristic* characteristic = nullptr;
 	GattCharacteristic::ValueChanged_revoker revoker;
-	queue<Data> notificationQueue;
 };
 
 struct AdvertisedDevice : Device
@@ -32,8 +32,6 @@ struct AdvertisedDevice : Device
 
 wstring addrToString(uint64_t addr);
 
-
-
 struct ConnectedDevice : Device
 {
 	BluetoothLEDevice leDev = nullptr;
@@ -41,7 +39,6 @@ struct ConnectedDevice : Device
 	BluetoothLEDevice::ConnectionStatusChanged_revoker revoker;
 	list<ConnectedSubscription*> subscriptions;
 	list<ConnectedCharacteristic*> characteristics;
-	int characteristicPollIndex = 0;
 	bool isConnected = false;
 	wstring print()
 	{
@@ -50,32 +47,42 @@ struct ConnectedDevice : Device
 };
 
 void ScanCharacteristicsAsync(ConnectedDevice* device);
-void DisconnectDevice(ConnectedDevice* device);
-void AddEvent(Device device, What what, Characteristic *c);
-void AddEvent(Device device, What what);
-void AddEvent(What what);
+bool DisconnectDevice(ConnectedDevice* device);
+void AddEvent(What what, Device* device, Characteristic* c, Data* d);
 
 // Variables
-mutex errorLock;
-queue<Data> errors;
-
 mutex eventsLock;
 queue<Event> events;
 
 mutex callbackLock;
-bool (*eventCallback)(Event ev) = nullptr;
+void (*eventCallback)(Event ev) = nullptr;
 
 mutex advertisedLock;
 list<AdvertisedDevice*> advertisedDevices;
-BluetoothLEAdvertisementWatcher watcher = nullptr;
-BluetoothLEAdvertisementWatcher::Received_revoker watcherRevoker;
+
+BluetoothLEAdvertisementWatcher watcher = BluetoothLEAdvertisementWatcher();
+bool watcherSetup = false;
 bool threadRun = false;
 bool threadRunning = false;
-thread _timeoutThread;
+//thread;
 
 mutex connectedLock;
 list<ConnectedDevice*> devices;
 
+// Init / destroy objects
+class BluetoothLowEnergyApi
+{
+public:
+	BluetoothLowEnergyApi()
+	{
+		Clean();
+	}
+
+	~BluetoothLowEnergyApi()
+	{
+		Clean();
+	}
+}BluetoothLowEnergyApiInstance;
 
 // Function - Convert address to string
 
@@ -94,31 +101,15 @@ wstring addrToString(uint64_t addr)
 
 // Function - Save and print error
 
-void AddErrorAsync(Data error)
-{
-	try
-	{
-		lock_guard error_lock(errorLock);
-		errors.push(error);
-		AddEvent(What::LIBRARY_ERROR);
-	}
-	catch (...)
-	{
-		//AddError("AddErrorAsync error: exception caught");
-	}
-}
-
-void AddError(const char* message, ...)
+void AddError(const char* message, Device * dev , Characteristic *c )
 {
 	try
 	{
 		Data error;
-		va_list args;
-		va_start(args, message);
-		error.size = snprintf((char*)error.buf, 512, message, args);
-		va_end(args);
-		cout << "ERROR [" << error.size << "]: " << (char*)error.buf << endl;
-		thread(AddErrorAsync, error).detach();
+		error.size = (uint16_t)strlen(message);
+		memcpy_s(error.buf, sizeof(error.buf) / sizeof(uint8_t), message, error.size);
+		//cout << "ERROR [" << error.size << "]: " << (char*)error.buf << endl;
+		AddEvent(What::LIBRARY_ERROR, dev, c, &error);
 	}
 	catch (...)
 	{
@@ -126,39 +117,16 @@ void AddError(const char* message, ...)
 	}
 }
 
-DllExport bool PollErrors(Data* e)
-{
-	if (e == nullptr)return false;
-	try
-	{
-		lock_guard lock(errorLock);
-
-		e->size = 0;
-
-		if (!errors.empty())
-		{
-			*e = errors.front();
-			errors.pop();
-			return true;
-		}
-	}
-	catch (...)
-	{
-		AddError("PollErrors error: exception caught");
-	}
-
-	return false;
-}
-
 // Function - Events
 
 DllExport bool PollEvents(Event* ev)
 {
 	if (ev == nullptr)return false;
+	ev->what = What::LIBRARY_NOTHING;
+
 	lock_guard lock(eventsLock); // TODO check why it needs to be here
 	try
 	{
-
 		if (!events.empty())
 		{
 			*ev = events.front();
@@ -168,12 +136,8 @@ DllExport bool PollEvents(Event* ev)
 	}
 	catch (...)
 	{
-		AddError("PollEvents error: exception caught");
+		AddError("PollEvents error: exception caught", nullptr, nullptr);
 	}
-
-	ev->who = Device();
-	ev->what = What::LIBRARY_NOTHING;
-
 	return false;
 }
 
@@ -182,26 +146,10 @@ void eventCallbackAsync(Event ev)
 	eventCallback(ev);
 }
 
-void AddEventAsync(Device device, What what, Characteristic * c)
+void AddEventAsync(Event cb)
 {
 	try
 	{
-		Event cb;
-		cb.who = device;
-		cb.what = what;
-
-		if (c != nullptr)
-		{
-			cb.characteristic = *c;
-
-
-			//wcscpy_s(cb.characteristic.uuid, sizeof(cb.characteristic.uuid) / sizeof(wchar_t), c->uuid);
-			//cb.characteristic.isService = c->isService;
-			//wcout << "thisisfrom" << c->isService << endl;
-			//wcout << "thisisfrom" << cb.characteristic.isService << endl;
-		}
-		
-
 		lock_guard lock(callbackLock);
 		lock_guard lock2(eventsLock);
 		if (eventCallback)	// if callback setup use it
@@ -225,75 +173,47 @@ void AddEventAsync(Device device, What what, Characteristic * c)
 	}
 }
 
-DllExport bool setEventCallback(bool (*callback)(Event ev))
+DllExport void SetEventCallback(void (*callback)(Event ev))
 {
 	try
 	{
-		{
-			lock_guard lock(callbackLock);
-			eventCallback = callback;
-		}
-		AddEvent(What::LIBRARY_CALLBACK_SETUP); // used to callback all previous events not polled
+		lock_guard lock(callbackLock);
+		eventCallback = callback;
+		AddEvent(What::LIBRARY_CALLBACK_SETUP, nullptr, nullptr, nullptr);
 	}
 	catch (...)
 	{
-		AddError("setEventCallback error: exception caught");
+		AddError("SetEventCallback error: exception caught", nullptr, nullptr);
 	}
-
-	return false;
 }
 
-DllExport bool removeEventCallback()
+DllExport void RemoveEventCallback()
 {
 	try
 	{
 		lock_guard lock(callbackLock);
 		eventCallback = nullptr;
-		return true;
 	}
 	catch (...)
 	{
-		AddError("setEventCallback error: exception caught");
+		AddError("RemoveEventCallback error: exception caught", nullptr, nullptr);
 	}
-	return false;
 }
 
-void AddEvent(Device device, What what, Characteristic *c)
+void AddEvent(What what, Device *device, Characteristic *c, Data *d)
 {
 	try
 	{
-		thread(AddEventAsync, device, what, c).detach();
+		Event cb;
+		cb.what = what;
+		if (device != nullptr)cb.who = *device;
+		if (c != nullptr)cb.characteristic = *c;
+		if (d != nullptr)cb.data = *d;
+		thread(AddEventAsync, cb).detach();
 	}
 	catch (...)
 	{
 		//AddError("AddEvent(Device device, What what) error: exception caught");
-	}
-}
-
-void AddEvent(Device device, What what)
-{
-	try
-	{
-		thread(AddEventAsync, device, what, nullptr).detach();
-	}
-	catch (...)
-	{
-		//AddError("AddEvent(Device device, What what) error: exception caught");
-	}
-}
-
-void AddEvent(What what)
-{
-	try
-	{
-		Device odev;
-		odev.address = 0;
-		odev.name[0] = 0;
-		thread(AddEventAsync, odev, what, nullptr).detach();
-	}
-	catch (...)
-	{
-		//AddError("AddEvent(What what)  error: exception caught");
 	}
 }
 
@@ -326,7 +246,7 @@ DllExport bool IsBluetoothEnabled()
 	}
 	catch (...)
 	{
-		AddError("IsBluetoothEnabled error: exception caught");
+		AddError("IsBluetoothEnabled error: exception caught", nullptr, nullptr);
 	}
 	return false;
 }
@@ -348,7 +268,7 @@ AdvertisedDevice* GetAdvertisedDevice(uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("GetAdvertisedDevice error: exception caught");
+		AddError("GetAdvertisedDevice error: exception caught", nullptr, nullptr);
 	}
 
 	return nullptr;
@@ -358,13 +278,15 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 {
 	if (eventArgs.AdvertisementType() == BluetoothLEAdvertisementType::NonConnectableUndirected) return;	
 
+	AdvertisedDevice* advertisedDevice = nullptr;
+
 	try
 	{
 		wstring localname = (wstring)eventArgs.Advertisement().LocalName();
 
 		lock_guard lock(advertisedLock);
 
-		AdvertisedDevice* advertisedDevice = GetAdvertisedDevice(eventArgs.BluetoothAddress());
+		advertisedDevice = GetAdvertisedDevice(eventArgs.BluetoothAddress());
 
 		if (advertisedDevice != nullptr)
 		{
@@ -372,7 +294,7 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 			{
 				wcscpy_s(advertisedDevice->name, sizeof(advertisedDevice->name) / sizeof(wchar_t), localname.c_str());
 				//wcout << L" - update " << advertisedDevice.print() << endl;
-				AddEvent(*advertisedDevice, What::DISCOVERED_UPDATED);
+				AddEvent(What::DISCOVERED_UPDATED, advertisedDevice, nullptr, nullptr);
 			}
 			advertisedDevice->lastAdvertisment = std::chrono::steady_clock::now();
 			return;
@@ -383,13 +305,13 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 		wcscpy_s(advertisedDevice->name, sizeof(advertisedDevice->name) / sizeof(wchar_t), localname.c_str());
 		//wcout << L" - add " << advertisedDevice->print() << endl;
 		advertisedDevice->lastAdvertisment = std::chrono::steady_clock::now();
-		AddEvent(*advertisedDevice, What::DISCOVERED_NEW);
+		AddEvent(What::DISCOVERED_NEW, advertisedDevice, nullptr, nullptr);
 
 		advertisedDevices.push_back(advertisedDevice);
 	}
 	catch (...)
 	{
-		AddError("OnAdvertisementReceived error: exception caught");
+		AddError("OnAdvertisementReceived error: exception caught", advertisedDevice, nullptr);
 	}
 }
 
@@ -406,7 +328,6 @@ void timeoutThread()
 			{
 				if (std::chrono::duration_cast<std::chrono::milliseconds>(t - advertisedDevice->lastAdvertisment).count() > LOST_TIMEOUT_MS)
 				{
-					AddEvent(*advertisedDevice, What::DISCOVERED_LOST);
 					advertisedDevices.remove(advertisedDevice);
 					delete advertisedDevice;
 					break;
@@ -415,7 +336,7 @@ void timeoutThread()
 		}
 		catch (...)
 		{
-			AddError("timeoutThread error: exception caught");
+			AddError("timeoutThread error: exception caught", nullptr, nullptr);
 		}
 
 		for (int i = 0; i < 10 && threadRun; i++)
@@ -431,47 +352,51 @@ void StartDeviceScanAsync()
 	try
 	{
 		lock_guard lock(advertisedLock);
-		if (watcher == nullptr)
+		if (!watcherSetup)
 		{
-			watcher = BluetoothLEAdvertisementWatcher();
+			//watcher = BluetoothLEAdvertisementWatcher();
 
 			watcher.ScanningMode(BluetoothLEScanningMode::Active);
-			watcherRevoker = watcher.Received(auto_revoke, OnAdvertisementReceived);
+			watcher.Received(OnAdvertisementReceived);
 
 			watcher.SignalStrengthFilter().InRangeThresholdInDBm(-70);
 			watcher.SignalStrengthFilter().OutOfRangeThresholdInDBm(-75);
 			watcher.SignalStrengthFilter().OutOfRangeTimeout(TimeSpan::duration(2000));
 
-			if(0) // Filter Advertisment
-			{
-				BluetoothLEManufacturerData manufacturerData;
-				manufacturerData.CompanyId(0xFFFE);
-				//DataWriter dw;
-				//dw.WriteString(L"Neurinnov");
-				//manufacturerData.Data(dw.DetachBuffer());
-				watcher.AdvertisementFilter().Advertisement().ManufacturerData().Append(manufacturerData);
-			}
+			//if(false) // TODO Filter Advertisment
+			//{
+			//	BluetoothLEManufacturerData manufacturerData;
+			//	manufacturerData.CompanyId(0xFFFE);
+			//	//DataWriter dw;
+			//	//dw.WriteString(L"Neurinnov");
+			//	//manufacturerData.Data(dw.DetachBuffer());
+			//	watcher.watcher.AdvertisementFilter().Advertisement().ManufacturerData().Append(manufacturerData);
+			//}
+			watcherSetup = true;
 		}
 
 		for (AdvertisedDevice* advertisedDevice : advertisedDevices)
 		{
-			AddEvent(*advertisedDevice, What::DISCOVERED_REMOVED);
+			AddEvent(What::DISCOVERED_REMOVED, advertisedDevice, nullptr, nullptr);
 			delete advertisedDevice;
 		}
+
 		advertisedDevices.clear();
 
 		if (threadRunning == false)
 		{
 			threadRun = true;
 			threadRunning = true;
-			_timeoutThread = thread(timeoutThread);
+			thread(timeoutThread).detach();
 		}
 
 		watcher.Start();
+
+		AddEvent(What::DISCOVERED_STARTED, nullptr, nullptr, nullptr);
 	}
 	catch (...)
 	{
-		AddError("StartDeviceScanAsync error: exception caught");
+		AddError("StartDeviceScanAsync error: exception caught", nullptr, nullptr);
 	}
 }
 
@@ -483,7 +408,7 @@ DllExport void StartDeviceScan()
 	}
 	catch (...)
 	{
-		AddError("StartDeviceScan error: exception caught");
+		AddError("StartDeviceScan error: exception caught", nullptr, nullptr);
 	}
 }
 
@@ -492,17 +417,16 @@ void StopDeviceScanAsync()
 	try
 	{
 		lock_guard lock(advertisedLock);
-		if (watcher != nullptr)
+		if (watcherSetup && threadRun)
 		{
 			watcher.Stop();
-
 			threadRun = false;
-			_timeoutThread.join();
+			AddEvent(What::DISCOVERED_STOPPED, nullptr, nullptr, nullptr);
 		}
 	}
 	catch (...)
 	{
-		AddError("StopDeviceScanAsync error: exception caught");
+		AddError("StopDeviceScanAsync error: exception caught", nullptr, nullptr);
 	}
 }
 
@@ -510,44 +434,12 @@ DllExport void StopDeviceScan()
 {
 	try
 	{
-		thread(StopDeviceScan).detach();
+		thread(StopDeviceScanAsync).detach();
 	}
 	catch (...)
 	{
-		AddError("StopDeviceScan error: exception caught");
+		AddError("StopDeviceScan error: exception caught", nullptr, nullptr);
 	}
-}
-
-DllExport bool PollAdvertisedDevices(Device* device, bool first)
-{
-	if (device == nullptr)return false;
-	try
-	{
-		lock_guard lock(advertisedLock);
-		static uint16_t currentIndex = 0;
-
-		if (first) currentIndex = 0;
-
-		for (size_t i = 0; i < advertisedDevices.size(); i++)
-		{
-			if (i == currentIndex)
-			{
-				list<AdvertisedDevice*>::iterator it = advertisedDevices.begin();
-				advance(it, currentIndex);
-				wcscpy_s(device->name, sizeof(device->name) / sizeof(wchar_t), (*it)->name);
-				device->address = (*it)->address;
-				currentIndex++;
-				return true;
-			}
-		}
-	}
-	catch (...)
-	{
-		AddError("PollAdvertisedDevices error: exception caught");
-		return false;
-	}
-
-	return false;
 }
 
 void CleanAdvertisedDevicesAsync()
@@ -557,14 +449,14 @@ void CleanAdvertisedDevicesAsync()
 		lock_guard lock(advertisedLock);
 		for (AdvertisedDevice* advDev : advertisedDevices)
 		{
-			AddEvent(*advDev, What::DISCOVERED_REMOVED);
+			AddEvent(What::DISCOVERED_REMOVED, advDev, nullptr, nullptr);
 			delete advDev;
 		}
 		advertisedDevices.clear();
 	}
 	catch (...)
 	{
-		AddError("CleanAdvertisedDevicesAsync error: exception caught");
+		AddError("CleanAdvertisedDevicesAsync error: exception caught", nullptr, nullptr);
 	}
 }
 
@@ -576,99 +468,8 @@ DllExport void CleanAdvertisedDevices()
 	}
 	catch (...)
 	{
-		AddError("CleanAdvertisedDevices error: exception caught");
+		AddError("CleanAdvertisedDevices error: exception caught", nullptr, nullptr);
 	}
-}
-
-DllExport bool IsDeviceConnectable(const wchar_t* deviceName)
-{
-	if (deviceName == nullptr)return false;
-
-	try
-	{
-		lock_guard lock(advertisedLock);
-		for (AdvertisedDevice* advDev : advertisedDevices)
-		{
-			if (!wcscmp(advDev->name, deviceName))
-			{
-				return true;
-			}
-		}
-	}
-	catch (...)
-	{
-		AddError("IsDeviceConnectable error: exception caught");
-	}
-	return false;
-}
-
-DllExport uint64_t GetDeviceAddress(const wchar_t* deviceName)
-{
-	if (deviceName == nullptr)return 0;
-	try
-	{
-		lock_guard lock(advertisedLock);
-		for (AdvertisedDevice* advDev : advertisedDevices)
-		{
-			if (!wcscmp(advDev->name, deviceName))
-			{
-				return advDev->address;
-			}
-		}
-	}
-	catch (...)
-	{
-		AddError("GetDeviceAddress error: exception caught");
-	}
-	return 0;
-}
-
-DllExport bool GetDevice(Device* odev, uint64_t deviceAddress)
-{
-	if (deviceAddress == 0)return false;
-	if (odev == nullptr)return false;
-
-	try
-	{
-		odev->address = 0;
-		odev->name[0] = 0;
-
-		lock_guard lock(advertisedLock);
-		for (AdvertisedDevice* advDev : advertisedDevices)
-		{
-			if (advDev->address == deviceAddress)
-			{
-				*odev = *advDev;
-				advDev->address = deviceAddress;
-				return true;
-			}
-		}
-	}
-	catch (...)
-	{
-		AddError("GetDeviceAddress error: exception caught in advertisment");
-	}
-
-	try
-	{
-		lock_guard lock(connectedLock);
-		for (ConnectedDevice* dev : devices)
-		{
-			if (dev->address == deviceAddress)
-			{
-				odev->address = deviceAddress;
-				int size = sizeof(dev->name) / sizeof(wchar_t);
-				wcscpy_s(odev->name, sizeof(odev->name) / sizeof(wchar_t), dev->name);
-				return true;
-			}
-		}
-	}
-	catch (...)
-	{
-		AddError("GetDeviceAddress error: exception caught in devices");
-	}
-
-	return false;
 }
 
 // Functions - Connected devices
@@ -687,7 +488,7 @@ ConnectedDevice* GetDevice(uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("GetDevice error: exception caught");
+		AddError("GetDevice error: exception caught", nullptr, nullptr);
 	}
 	return nullptr;
 }
@@ -704,18 +505,18 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 			if (dev.ConnectionStatus() != BluetoothConnectionStatus::Connected)
 			{
 				DisconnectDevice(device);
-				AddEvent(*device, What::DEVICE_LOST);
+				AddEvent(What::DEVICE_LOST, device, nullptr, nullptr);
 				devices.remove(device);
 				delete device;
 			}
 			else
 			{
-				AddEvent(*device, What::DEVICE_CONNECTED);
+				AddEvent(What::DEVICE_CONNECTED, device, nullptr, nullptr);
 				lock_guard lock2(advertisedLock);
 				AdvertisedDevice* advDev = GetAdvertisedDevice(device->address);
 				if (advDev != nullptr)
 				{
-					AddEvent(*advDev, What::DISCOVERED_REMOVED);
+					AddEvent(What::DISCOVERED_REMOVED, advDev, nullptr, nullptr);
 					advertisedDevices.remove(advDev);
 					delete advDev;
 				}
@@ -724,20 +525,22 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 	}
 	catch (...)
 	{
-		AddError("ConnectionStatusChangedEvent error: exception caught");
+		AddError("ConnectionStatusChangedEvent error: exception caught", nullptr, nullptr);
 	}
 }
 
-bool ConnectDeviceAsync(uint64_t deviceAddress)
+void ConnectDeviceAsync(uint64_t deviceAddress)
 {
-	if (deviceAddress == 0) return false;
+	if (deviceAddress == 0) return;
+
+	ConnectedDevice* device = nullptr;
 
 	try
 	{
 		lock_guard lock(connectedLock);
-		ConnectedDevice* device = GetDevice(deviceAddress);
+		device = GetDevice(deviceAddress);
 
-		if (device != nullptr) return device->isConnected;
+		if (device != nullptr) return;
 
 		device = new ConnectedDevice();
 		device->address = deviceAddress;
@@ -764,48 +567,36 @@ bool ConnectDeviceAsync(uint64_t deviceAddress)
 				wcscpy_s(device->name, sizeof(device->name) / sizeof(wchar_t), w.c_str());
 			}
 			thread(ScanCharacteristicsAsync, device).detach();
-			return true;
 		}
 		else
 		{
-			AddEvent(*device, What::DEVICE_DISCONNECTED);
+			AddEvent(What::DEVICE_DISCONNECTED, device, nullptr, nullptr);
 			DisconnectDevice(device);
 			delete device;
-			return false;
 		}
 	}
 	catch (...)
 	{
-		AddError("ConnectDeviceAsync error: exception caught");
+		AddError("ConnectDeviceAsync error: exception caught", device, nullptr);
 	}
-	return false;
 }
 
-DllExport bool ConnectDevice(uint64_t deviceAddress, bool block)
+DllExport void ConnectDevice(uint64_t deviceAddress)
 {
-	if (deviceAddress == 0)return false;
+	if (deviceAddress == 0)return;
 	try
 	{
-		if (block)
-		{
-			return ConnectDeviceAsync(deviceAddress);
-		}
-		else
-		{
-			thread(ConnectDeviceAsync, deviceAddress).detach();
-		}
+		thread(ConnectDeviceAsync, deviceAddress).detach();
 	}
 	catch (...)
 	{
-		AddError("ConnectDevice error: exception caught");
+		AddError("ConnectDevice error: exception caught", nullptr, nullptr);
 	}
-
-	return true;
 }
 
-void DisconnectDevice(ConnectedDevice* device)
+bool DisconnectDevice(ConnectedDevice* device)
 {
-	if (device == nullptr) return;
+	if (device == nullptr) return false;
 	try
 	{
 		device->isConnected = false;
@@ -817,25 +608,37 @@ void DisconnectDevice(ConnectedDevice* device)
 			sub->revoker.revoke();
 			delete sub;
 		}
+
+		for (ConnectedCharacteristic* sub : device->characteristics)
+		{
+			delete sub;
+		}
+
 		device->subscriptions.clear();
+		device->characteristics.clear();
+		return true;
 	}
 	catch (...)
 	{
-		AddError("ConnectionStatusChangedEvent error: exception caught");
+		AddError("ConnectionStatusChangedEvent error: exception caught", device, nullptr);
 	}
+	return false;
 }
 
 void DisconnectDeviceAsync(uint64_t deviceAddress)
 {
 	if (deviceAddress == 0) return;
+	ConnectedDevice* device = nullptr;
 	try
 	{
 		lock_guard lock(connectedLock);
-		ConnectedDevice* device = GetDevice(deviceAddress);
+		device = GetDevice(deviceAddress);
 		if (device != nullptr)
 		{
-			DisconnectDevice(device);
-			AddEvent(*device, What::DEVICE_DISCONNECTED);
+			if (DisconnectDevice(device))
+			{
+				AddEvent(What::DEVICE_DISCONNECTED, device, nullptr, nullptr);
+			}
 			devices.remove(device);
 			delete device;
 			return;
@@ -843,7 +646,7 @@ void DisconnectDeviceAsync(uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("DisconnectDeviceAsync error: exception caught");
+		AddError("DisconnectDeviceAsync error: exception caught", device, nullptr);
 	}
 }
 
@@ -856,17 +659,18 @@ DllExport void DisconnectDevice(uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("DisconnectDevice error: exception caught");
+		AddError("DisconnectDevice error: exception caught", nullptr, nullptr);
 	}
 }
 
 DllExport bool IsDeviceConnected(uint64_t deviceAddress)
 {
 	if (deviceAddress == 0)return false;
+	ConnectedDevice* device = nullptr;
 	try
 	{
 		lock_guard lock(connectedLock);
-		ConnectedDevice* device = GetDevice(deviceAddress);
+		device = GetDevice(deviceAddress);
 		if (device != nullptr)
 		{
 			return device->isConnected;
@@ -874,7 +678,7 @@ DllExport bool IsDeviceConnected(uint64_t deviceAddress)
 	}
 	catch (...)
 	{
-		AddError("IsDeviceConnected error: exception caught");
+		AddError("IsDeviceConnected error: exception caught", device, nullptr);
 	}
 
 	return false;
@@ -896,168 +700,159 @@ ConnectedCharacteristic *FindCharacteristic(ConnectedDevice* dev, wstring t_uuid
 			{
 				return (*it);
 			}
-		}
-
-		//wchar_t uuid[100];
-		//IVectorView<GattDeviceService> services = dev->result.Services();
-		//for (GattDeviceService service : services)
-		//{
-		//	//wcscpy_s(uuid, sizeof(uuid) / sizeof(wchar_t), to_hstring(service.Uuid()).c_str());
-		//	//wcout << uuid << endl;
-
-		//	IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
-
-		//	for (GattCharacteristic characteristic : characteristics)
-		//	{
-		//		wcscpy_s(uuid, sizeof(uuid) / sizeof(wchar_t), to_hstring(characteristic.Uuid()).c_str());
-		//		if (wcslen(uuid) != t_uuid.length()) continue;
-		//		//wcout << "\t" << uuid << endl;
-
-		//		if (!wcscmp(t_uuid.c_str(), uuid))
-		//		{
-		//			return characteristic;
-		//		}
-		//	}
-		//}
+		}		
 	}
 	catch (...)
 	{
-		AddError("FindCharacteristic error: exception caught");
+		AddError("FindCharacteristic error: exception caught", dev, nullptr);
 		return nullptr;
 	}
 
-	AddError("FindCharacteristic error: characteristic not found !");
+	AddError("FindCharacteristic error: characteristic not found !", dev, nullptr);
 	return nullptr;
 }
 
-bool DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, Data data)
+void DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, Data data)
 {
-	if (deviceAddress == 0)return false;
-	if (uuid == nullptr) return false;
-	if (data.buf == nullptr)return false;
+	if (deviceAddress == 0)return;
+	if (uuid == nullptr) return;
+	if (data.buf == nullptr)return;
+
+	ConnectedDevice* device = nullptr;
+	ConnectedCharacteristic* characteristic = nullptr;
 
 	try
 	{
-		ConnectedDevice* device = nullptr;
 		{
 			lock_guard lock(connectedLock);
 			device = GetDevice(deviceAddress);
-			if (device == nullptr) return false;
+
+			if (device == nullptr)
+			{
+				AddEvent(What::CHARACTERISTIC_NOT_WRITTEN, device, characteristic, &data);
+				return;
+			}
 		}
 		
-		ConnectedCharacteristic* characteristic = FindCharacteristic(device, uuid);
+		characteristic = FindCharacteristic(device, uuid);
 		if (characteristic == nullptr)
 		{
-			AddEvent(*device, What::CHARACTERISTIC_NOT_WRITTEN);
-			return false;
+			AddEvent(What::CHARACTERISTIC_NOT_WRITTEN, device, characteristic, &data);
+			return;
 		}
 
 		array_view<uint8_t> av(data.buf, data.size);
-
 		auto writer = DataWriter();
 		writer.WriteBytes(av);
 			
 		auto status = characteristic->characteristic.WriteValueWithResultAsync(writer.DetachBuffer(), GattWriteOption::WriteWithoutResponse).get();
 		if (status.Status() == GattCommunicationStatus::Success)
 		{
-			AddEvent(*device, What::CHARACTERISTIC_WRITTEN, characteristic);
-			return true;
-		}
-		AddEvent(*device, What::CHARACTERISTIC_NOT_WRITTEN);
-		return false;
-		
-	}
-	catch (...)
-	{
-		AddError("DeviceWriteAsync error: exception caught");
-	}
-
-	AddEvent(What::CHARACTERISTIC_NOT_WRITTEN);
-	return false;
-}
-
-DllExport bool DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data, bool block)
-{
-	if (deviceAddress == 0)return false;
-	try
-	{
-		// Sall we copy data ? -> probably (check if copy is enough)
-		if (block)
-		{
-			return DeviceWriteAsync(deviceAddress, uuid, *data);
+			AddEvent(What::CHARACTERISTIC_WRITTEN, device, characteristic, &data);
+			return;
 		}
 		else
 		{
-			thread(DeviceWriteAsync, deviceAddress, uuid, *data).join();
+			AddEvent(What::CHARACTERISTIC_NOT_WRITTEN, device, characteristic, &data);
+			return;
 		}
 	}
 	catch (...)
 	{
-		AddError("DeviceWrite error: exception caught");
+		AddError("DeviceWriteAsync error: exception caught", device, characteristic);
 	}
 
-	return false;
+	AddEvent(What::CHARACTERISTIC_NOT_WRITTEN, device, characteristic, &data);
 }
 
-DllExport bool DeviceRead(uint64_t deviceAddress, wchar_t* uuid, Data* data)
+DllExport void DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data)
 {
-	if (deviceAddress == 0)return false;
-	if (uuid == nullptr) return false;
-	if (data->buf == nullptr)return false;
+	if (deviceAddress == 0)return;
+	try
+	{
+		thread(DeviceWriteAsync, deviceAddress, uuid, *data).detach();
+	}
+	catch (...)
+	{
+		AddError("DeviceWrite error: exception caught", nullptr, nullptr);
+	}
+}
+
+void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
+{
+	if (deviceAddress == 0)return;
+	if (uuid == nullptr) return;
+
+	ConnectedDevice* device = nullptr;
+	ConnectedCharacteristic* characteristic = nullptr;
 
 	try
 	{
-		ConnectedDevice* device = nullptr;
 		{
 			lock_guard lock(connectedLock);
 			device = GetDevice(deviceAddress);
-			if (device == nullptr) return false;
+			if (device == nullptr) return;
 		}
 
-		ConnectedCharacteristic* characteristic = FindCharacteristic(device, uuid);
+		characteristic = FindCharacteristic(device, uuid);
 		if (characteristic == nullptr)
 		{
-			AddEvent(*device, What::CHARACTERISTIC_NOT_READED);
-			return false;
+			AddEvent(What::CHARACTERISTIC_NOT_READED, device, characteristic, nullptr);
+			return;
 		}
 
 		auto val = characteristic->characteristic.ReadValueAsync().get();
 
 		if (val.Status() != GattCommunicationStatus::Success)
 		{
-			return false;
-			AddEvent(*device, What::CHARACTERISTIC_NOT_READED);
+			AddEvent(What::CHARACTERISTIC_NOT_READED, device, characteristic, nullptr);
+			return;
 		}
 
-		data->size = val.Value().Length();
+		Data data;
+		data.size = val.Value().Length();
 
-		memcpy(data->buf, val.Value().data(), data->size);
-		data->buf[data->size] = '\0';
+		memcpy(data.buf, val.Value().data(), data.size);
+		data.buf[data.size] = '\0';
 
-		AddEvent(*device, What::CHARACTERISTIC_READED);
-		return true;
+		AddEvent(What::CHARACTERISTIC_READED, device, characteristic, &data);
+		return;
 	}
 	catch (...)
 	{
-		AddError("DeviceReadAsync error: exception caught");
+		AddError("DeviceReadAsync error: exception caught", device, characteristic);
 	}
 
-	AddEvent(What::CHARACTERISTIC_NOT_READED);
-	return false;
+	AddEvent(What::CHARACTERISTIC_NOT_READED, device, characteristic, nullptr);
 }
 
-
-bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
+DllExport void DeviceRead(uint64_t deviceAddress, wchar_t* uuid)
 {
-	if (deviceAddress == 0) return false;
+	if (deviceAddress == 0)return;
+	try
+	{
+		thread(DeviceReadAsync, deviceAddress, uuid).detach();
+	}
+	catch (...)
+	{
+		AddError("DeviceRead error: exception caught", nullptr, nullptr);
+	}
+}
+
+void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
+{
+	if (deviceAddress == 0) return;
+	ConnectedDevice* device = nullptr;
+	ConnectedCharacteristic* characteristic = nullptr;
+
 	try
 	{
 		lock_guard lock(connectedLock);
-		ConnectedDevice* device = GetDevice(deviceAddress);
+		device = GetDevice(deviceAddress);
 
 		if (device != nullptr)
 		{
-			ConnectedCharacteristic* characteristic = FindCharacteristic(device, uuid);
+			characteristic = FindCharacteristic(device, uuid);
 
 			if (characteristic != nullptr)
 			{
@@ -1066,16 +861,12 @@ bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 				{
 					if (sub->characteristic->characteristic.Uuid() == characteristic->characteristic.Uuid())
 					{
-						return true;
+						return;
 					}
 				}
 
-
 				ConnectedSubscription* sub = new ConnectedSubscription();
-
-
 				sub->characteristic = characteristic;
-	
 
 				// TODO test 
 				// sub->characteristic->characteristic.ProtectionLevel(GattProtectionLevel::EncryptionRequired);
@@ -1092,124 +883,70 @@ bool DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 								cd.size = args.CharacteristicValue().Length();
 								memcpy(cd.buf, args.CharacteristicValue().data(), cd.size);
 								cd.buf[cd.size] = '\0';
-
-								sub->notificationQueue.push(cd);
-								AddEvent(*device, What::CHARACTERISTIC_NOTIFICATION, sub->characteristic);
+								AddEvent(What::CHARACTERISTIC_NOTIFICATION, device, sub->characteristic, &cd);
 							}
 							catch (...)
 							{
-								AddError("DeviceSubscribeAsync ValueChanged error: exception caught");
+								AddError("DeviceSubscribeAsync ValueChanged error: exception caught", device, sub->characteristic);
 							}
 
 							return;
 						});
 
 					device->subscriptions.push_back(sub);
-					AddEvent(*device, What::CHARACTERISTIC_SUBSCRIBED, sub->characteristic);
-					return true;
+					AddEvent(What::CHARACTERISTIC_SUBSCRIBED, device, characteristic, nullptr);
+					return;
 				}
 				delete sub;
-				AddEvent(*device, What::CHARACTERISTIC_NOT_SUBSCRIBED);
-				return false;
+				AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED, device, characteristic, nullptr);
+				return;
 			}
-			AddEvent(*device, What::CHARACTERISTIC_NOT_SUBSCRIBED);
-			return false;
+			AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED, device, characteristic, nullptr);
+			return;
 		}
 	}
 	catch (...)
 	{
-		AddError("DeviceSubscribeAsync error: exception caught");
+		AddError("DeviceSubscribeAsync error: exception caught", device, characteristic);
 	}
-	AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED);
-	return false;
+	AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED, device, characteristic, nullptr);
 }
 
-DllExport bool DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid, bool block)
+DllExport void DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid)
 {
-	if (deviceAddress == 0)return false;
-	if (uuid == nullptr)return false;
+	if (deviceAddress == 0)return;
+	if (uuid == nullptr)return;
 	try
 	{
-		if (block)
-		{
-			return DeviceSubscribeAsync(deviceAddress, uuid);
-		}
-		else
-		{
-			thread(DeviceSubscribeAsync, deviceAddress, uuid).join();
-		}
+		thread(DeviceSubscribeAsync, deviceAddress, uuid).detach();
 	}
 	catch (...)
 	{
-		AddError("DeviceSubscribe error: exception caught");
+		AddError("DeviceSubscribe error: exception caught", nullptr, nullptr);
 	}
-	return false;
-}
-
-DllExport bool PollNotifications(Data* n, uint64_t deviceAddress, wchar_t * uuid)
-{
-	if (deviceAddress == 0) return false;
-	if (n == nullptr) return false;
-
-	try
-	{
-		n->size = 0;
-
-		lock_guard lock(connectedLock);
-
-		ConnectedDevice* dev = GetDevice(deviceAddress);
-
-		if (dev == nullptr) return false;
-
-		for (list<ConnectedSubscription*>::iterator i = dev->subscriptions.begin(); i != dev->subscriptions.end(); i++)
-		{
-			if (!wcscmp((*i)->characteristic->uuid, uuid))
-			{
-				if (!(*i)->notificationQueue.empty())
-				{
-					Data nn = (*i)->notificationQueue.front();
-
-					memcpy(n->buf, nn.buf, nn.size);
-					n->size = nn.size;
-
-					(*i)->notificationQueue.pop();
-					return true;
-				}
-
-			}
-		}	
-	}
-	catch (...)
-	{
-		AddError("PollNotifications error: exception caught");
-	}
-
-	return false;
 }
 
 void ScanCharacteristicsAsync(ConnectedDevice * dev)
 {
 	if (dev == nullptr) return;
+
+	ConnectedCharacteristic* current = nullptr;
+
 	try
-	{
-		{
-			lock_guard lock(connectedLock);
-			//std::queue<ConnectedCharacteristic> empty; // empty and clear pointers
-			//std::swap(dev->characteristicQueue, empty);
-		}
-		
+	{		
 		IVectorView<GattDeviceService> services = dev->result.Services();
 		for (GattDeviceService service : services)
 		{
 			{
 				wstring uuidStr = (wstring)to_hstring(service.Uuid());
 				//wcout << "s" << uuidStr << endl;
-				ConnectedCharacteristic *current = new ConnectedCharacteristic(); 
+				current = new ConnectedCharacteristic();
 				current->isService = true;
 				//current.characteristic = 0;
 				wcscpy_s(current->uuid, sizeof(current->uuid) / sizeof(wchar_t) , uuidStr.c_str());
 				lock_guard lock(connectedLock);
 				dev->characteristics.push_back(current);
+				AddEvent(What::CHARACTERISTIC_SCAN_NEW, dev, current, nullptr);
 			}
 			
 			IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
@@ -1218,58 +955,21 @@ void ScanCharacteristicsAsync(ConnectedDevice * dev)
 			{
 				wstring uuidStr = (wstring)to_hstring(characteristic.Uuid());
 				//wcout << "c" << uuidStr << endl;
-				ConnectedCharacteristic *current = new ConnectedCharacteristic(); 
+				current = new ConnectedCharacteristic();
 				current->isService = false;
 				current->characteristic = characteristic;
 				wcscpy_s(current->uuid, sizeof(current->uuid) / sizeof(wchar_t), uuidStr.c_str());
 				lock_guard lock(connectedLock);
 				dev->characteristics.push_back(current);
+				AddEvent(What::CHARACTERISTIC_SCAN_NEW, dev, current, nullptr);
 			}
 		}
-		AddEvent(*dev, What::CHARACTERISTIC_SCANNED);
+		AddEvent(What::CHARACTERISTIC_SCAN_OVER, dev, current, nullptr);
 	}
 	catch (...)
 	{
-		AddError("ScanCharacteristicsAsync error: exception caught");
+		AddError("ScanCharacteristicsAsync error: exception caught", dev, current);
 	}
-}
-
-bool PollCharacteristics(Characteristic* c, uint64_t deviceAddress, bool first)
-{
-	if (deviceAddress == 0) return false;
-	if (c == nullptr) return false;
-
-	try
-	{
-		lock_guard lock(connectedLock);
-
-		ConnectedDevice* dev = GetDevice(deviceAddress);
-
-		if (dev == nullptr) return false;
-
-		if (first) dev->characteristicPollIndex = 0;
-
-		for (size_t i = 0; i < dev->characteristics.size(); i++)
-		{
-			if (i == dev->characteristicPollIndex)
-			{
-				list<ConnectedCharacteristic*>::iterator it = dev->characteristics.begin();
-				advance(it, dev->characteristicPollIndex);
-
-				wcscpy_s(c->uuid, sizeof(c->uuid) / sizeof(wchar_t), (*it)->uuid);
-				c->isService = (*it)->isService;
-
-				dev->characteristicPollIndex++;
-				return true;
-			}
-		}
-	}
-	catch (...)
-	{
-		AddError("PollCharacteristics error: exception caught");
-	}
-
-	return false;
 }
 
 // Function - Clean quit / init
@@ -1299,11 +999,6 @@ DllExport void Clean()
 			devices.clear();
 		}
 		{
-			lock_guard lock(errorLock);
-			std::queue<Data> empty;
-			std::swap(errors, empty);
-		}
-		{
 			lock_guard lock3(eventsLock);
 			std::queue<Event> empty;
 			std::swap(events, empty);
@@ -1315,6 +1010,6 @@ DllExport void Clean()
 	}
 	catch (...)
 	{
-		AddError("Clean error: exception caught");
+		AddError("Clean error: exception caught", nullptr, nullptr);
 	}
 }

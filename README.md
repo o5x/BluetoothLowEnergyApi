@@ -36,6 +36,9 @@ enum What
 {
     LIBRARY_ERROR,                      // Error
     LIBRARY_NOTHING,                    // Nothing
+    LIBRARY_CALLBACK_SETUP,             // When callback is setup
+    DISCOVERED_STARTED,                 // Started discovery
+    DISCOVERED_STOPPED,                 // Stopped discovery
     DISCOVERED_NEW,                     // Device Advertisment : new device
     DISCOVERED_UPDATED,                 // Device Advertisment name updated
     DISCOVERED_LOST,                    // Device Advertisment lost (not advertisment for 10s)
@@ -43,10 +46,14 @@ enum What
     DEVICE_CONNECTED,                   // Device connected
     DEVICE_DISCONNECTED,                // Device disconnected (from code) - also triggered when not DEVICE_CONNECTED
     DEVICE_LOST,                        // Device disconnected (external cause)
+    CHARACTERISTIC_SCAN_NEW,            // New Characteristic 
+    CHARACTERISTIC_SCAN_OVER,           // Characteristic scan complete
     CHARACTERISTIC_WRITTEN,             // Characteristic write successful
     CHARACTERISTIC_NOT_WRITTEN,         // Characteristic write error
+    CHARACTERISTIC_READED,              // Characteristic read successful
+    CHARACTERISTIC_NOT_READED,          // Characteristic read error
     CHARACTERISTIC_SUBSCRIBED,          // Characteristic subscribe successful
-    CHARACTERISTIC_NOT_SUBSCRIBED,      // Characteristic subscribe successful
+    CHARACTERISTIC_NOT_SUBSCRIBED,      // Characteristic subscribe error
     CHARACTERISTIC_NOTIFICATION         // Notification recieved
 };
 ```
@@ -54,16 +61,17 @@ enum What
 ### Structures
 
 ```CS
+
 struct Device
 {
     public UInt64 address;
     public string name;
 }
 
-struct Event
+struct Characteristic
 {
-    public What what;
-    public Device who;
+    public bool isService;
+    public string uuid;
 }
 
 struct Data
@@ -71,36 +79,44 @@ struct Data
     public byte[] buf;
     public short size;
 }
+
+struct Event
+{
+    public What what;
+    public Device who;
+    public Characteristic characteristic;
+    public Data data;
+}
 ```
 
 ### Interface functions
 
-```CS
-bool PollErrors(out Data err);
-bool PollEvents(out Event ev);
-bool IsBluetoothEnabled();
+```CS   
+    bool PollEvents(out Event ev);
 
-// Device scan functions    
-int StartDeviceScan();
-int StopDeviceScan();
-bool PollAdvertisedDevices(out Device advertisedDevice, bool first);
-void CleanAdvertisedDevices();
-bool IsDeviceConnectable(string deviceName);
-UInt64 GetDeviceAddress(string deviceName);
-bool GetDevice(out Device advertisedDevice, UInt64 addr);
+    void SetEventCallback(CallbackEvent callback);
+    void RemoveEventCallback();
 
-// Connect functions    
-bool ConnectDevice(UInt64 deviceAddress, bool block = false);
-void DisconnectDevice(UInt64 deviceAddress);
-bool IsDeviceConnected(UInt64 deviceAddress);
+    bool IsBluetoothEnabled();
 
-// Characteristics    
-bool DeviceWrite(UInt64 deviceAddress, string uuid, string data, bool block = false);
-bool DeviceSubscribe(UInt64 deviceAddress, string uuid, bool block = false);
-bool PollNotifications(out Data n, UInt64 uuid);
+    // Device scan functions    
+    void StartDeviceScan();
+    void StopDeviceScan();
+    void CleanAdvertisedDevices();
 
-// Library clean    
-void Clean();
+    // Connect functions   
+    void ConnectDevice(UInt64 deviceAddress);
+    void DisconnectDevice(UInt64 deviceAddress);
+    bool IsDeviceConnected(UInt64 deviceAddress);
+
+    // Characteristics
+    void DeviceWrite(UInt64 deviceAddress, string uuid, ref Data data);
+    void DeviceRead(UInt64 deviceAddress, string uuid, ref Data data);
+    void DeviceSubscribe(UInt64 deviceAddress, string uuid);
+
+
+    // Library clean    
+    void Clean();
 ```
 
 ## Build
@@ -126,12 +142,13 @@ To test the API follow these steps :
 - Wait until the compilation finishes successfully and the program to run.
 
 ```CS
-static string devName = "NV-Command";
-static string devCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
+static readonly string devName = "NV-Command";
+static readonly string devWriteCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
+static readonly string devReadCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
 ```
 ***Important Note*** : The Characteristics need to be surrounded with braces : `{}`
 
-This Test program is looking for a device `devName` to write and subscribe to the characteristic `devCharacteristic`. When started it will tell the user if the bluetooth is ready to be used (available + enabled), start scanning the devices, connect, write and subscribe, and show de notification data string in the console. When the first notification is recieved it disconnect the device and close the program, Otherwise you can cancel with Ctrl+C (will disconnect and exit).
+This Test program is looking for a device `devName` to write and subscribe to the characteristicd `devWriteCharacteristic` and `devReadCharacteristic`. When started it will tell the user if the bluetooth is ready to be used (available + enabled), start scanning the devices, connect, write and subscribe, and show de notification data string in the console. When the first notification is recieved it disconnect the device and close the program, Otherwise you can cancel with Ctrl+C (will disconnect and exit).
 
 If the device is lost, it will automatically reconnect when available.
 

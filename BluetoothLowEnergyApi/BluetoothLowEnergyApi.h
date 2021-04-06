@@ -3,40 +3,38 @@
 #include "pch.h"
 #define DllExport extern "C" __declspec( dllexport )
 
+/*
+    Fix Delay to close when discovery is running
+    Find out why 20 is max packet length
+*/
+
 // Library content & configuration 
 #define LOST_TIMEOUT_MS 10000
 
-// add auto read charactristics (to avoid latency on read / write)
-// add notification UUID
-// fix isservice 
-// add data into event ? (see memory size and structure hierarchy)
-	// reove pollNotification
-	// remove read block delay
-	// remove error polling ? 
-	// remove advertised device pollint 
-	// if all by pointer ? ref / out check 
-
-// Enum
+// Enumerations
 enum class What
 {
-	LIBRARY_ERROR,
-	LIBRARY_NOTHING,
-	LIBRARY_CALLBACK_SETUP,
-	DISCOVERED_NEW,
-	DISCOVERED_UPDATED,
-	DISCOVERED_LOST,
-	DISCOVERED_REMOVED,
-	DEVICE_CONNECTED,
-	DEVICE_DISCONNECTED,
-	DEVICE_LOST,
-	CHARACTERISTIC_WRITTEN,
-	CHARACTERISTIC_NOT_WRITTEN,
-	CHARACTERISTIC_READED,
-	CHARACTERISTIC_NOT_READED,
-	CHARACTERISTIC_SUBSCRIBED,
-	CHARACTERISTIC_NOT_SUBSCRIBED,
-	CHARACTERISTIC_NOTIFICATION,
-	CHARACTERISTIC_SCANNED
+    LIBRARY_ERROR,
+    LIBRARY_NOTHING,
+    LIBRARY_CALLBACK_SETUP,
+    DISCOVERED_STARTED,
+    DISCOVERED_STOPPED,
+    DISCOVERED_NEW,
+    DISCOVERED_UPDATED,
+    DISCOVERED_LOST,
+    DISCOVERED_REMOVED,
+    DEVICE_CONNECTED,
+    DEVICE_DISCONNECTED,
+    DEVICE_LOST,
+    CHARACTERISTIC_SCAN_NEW,
+    CHARACTERISTIC_SCAN_OVER,
+    CHARACTERISTIC_WRITTEN,
+    CHARACTERISTIC_NOT_WRITTEN,
+    CHARACTERISTIC_READED,
+    CHARACTERISTIC_NOT_READED,
+    CHARACTERISTIC_SUBSCRIBED,
+    CHARACTERISTIC_NOT_SUBSCRIBED,
+    CHARACTERISTIC_NOTIFICATION
 };
 
 // Structures
@@ -48,8 +46,8 @@ struct Device
 
 struct Characteristic
 {
-	wchar_t uuid[100] = L"";
-	bool isService = false;
+    bool isService = false;
+	wchar_t uuid[50] = L"";
 };
 
 struct Data
@@ -63,41 +61,32 @@ struct Event
 	What what = What::LIBRARY_NOTHING;
 	Device who;
 	Characteristic characteristic;
-	Data data;
+    Data data;
 };
 
 
-
 // Functions
-DllExport bool PollErrors(Data* e);
 DllExport bool PollEvents(Event* ev);
 
-DllExport bool setEventCallback(bool (*callback)(Event ev));
-DllExport bool removeEventCallback();
+DllExport void SetEventCallback(void (*callback)(Event ev));
+DllExport void RemoveEventCallback();
 
 DllExport bool IsBluetoothEnabled();
 
 // Device scan function
 DllExport void StartDeviceScan();
 DllExport void StopDeviceScan();
-//DllExport bool PollAdvertisedDevices(Device* device, bool first = false);
 DllExport void CleanAdvertisedDevices();
-DllExport bool IsDeviceConnectable(const wchar_t* deviceName);
-DllExport uint64_t GetDeviceAddress(const wchar_t* deviceName);
-DllExport bool GetDevice(Device* dev, uint64_t deviceAddress);
 
 // Connect functions
-DllExport bool ConnectDevice(uint64_t deviceAddress, bool block = false);
+DllExport void ConnectDevice(uint64_t deviceAddress);
 DllExport void DisconnectDevice(uint64_t deviceAddress);
 DllExport bool IsDeviceConnected(uint64_t deviceAddress);
 
 // Characteristics
-DllExport bool DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data, bool block = false);
-DllExport bool DeviceRead(uint64_t deviceAddress, wchar_t* uuid, Data* data);
-
-DllExport bool DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid, bool block = false);
-DllExport bool PollNotifications(Data* n, uint64_t deviceAddress, wchar_t* uuid); // TODO add ref to notificatioun uuid as out variable
-DllExport bool PollCharacteristics(Characteristic* c, uint64_t deviceAddress, bool first = false);
+DllExport void DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data);
+DllExport void DeviceRead(uint64_t deviceAddress, wchar_t* uuid);
+DllExport void DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid);
 
 // Clean
 DllExport void Clean();
