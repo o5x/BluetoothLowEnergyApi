@@ -5,6 +5,10 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DocumentationFile>C:\Users\arrol\source\repos\BluetoothLowEnergyApi\BluetoothLowEnergyApiTest\BluetoothLowEnergyApiTest.xml</DocumentationFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <None Update="BluetoothLowEnergyApi.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
