@@ -1,3 +1,13 @@
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <file>	BluetoothLowEnergyApi\BluetoothLowEnergyApi.cpp </file>
+///
+/// <copyright file="BluetoothLowEnergyApi.cpp" company="arrol.fr">
+/// Copyright (c) 2021 arrol.fr. All rights reserved.
+/// </copyright>
+///
+/// <summary>	Implements the bluetooth low energy API class. </summary>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #include "pch.h"
 #include "BluetoothLowEnergyApi.h"
 
@@ -13,32 +23,65 @@ using namespace Windows::Devices::Bluetooth::GenericAttributeProfile;
 using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation::Collections;
 
-// Local structures and prototypes
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Local structures and prototypes. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 struct ConnectedCharacteristic : Characteristic 
 {
+	/// <summary>	The characteristic. </summary>
 	GattCharacteristic characteristic = nullptr;
 };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	A connected subscription. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 struct ConnectedSubscription
 {
+	/// <summary>	The characteristic. </summary>
 	ConnectedCharacteristic* characteristic = nullptr;
+	/// <summary>	The revoker. </summary>
 	GattCharacteristic::ValueChanged_revoker revoker;
 };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	An advertised device. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 struct AdvertisedDevice : Device
 {
+	/// <summary>	The last advertisment. </summary>
 	chrono::steady_clock::time_point lastAdvertisment;
 };
 
 wstring addrToString(uint64_t addr);
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	A connected device. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 struct ConnectedDevice : Device
 {
+	/// <summary>	The le development. </summary>
 	BluetoothLEDevice leDev = nullptr;
+	/// <summary>	The result. </summary>
 	GattDeviceServicesResult result = nullptr;
+	/// <summary>	The revoker. </summary>
 	BluetoothLEDevice::ConnectionStatusChanged_revoker revoker;
+	/// <summary>	The subscriptions. </summary>
 	list<ConnectedSubscription*> subscriptions;
+	/// <summary>	The characteristics. </summary>
 	list<ConnectedCharacteristic*> characteristics;
+	/// <summary>	True if is connected, false if not. </summary>
 	bool isConnected = false;
 	wstring print()
 	{
@@ -50,26 +93,50 @@ void ScanCharacteristicsAsync(ConnectedDevice* device);
 bool DisconnectDevice(ConnectedDevice* device);
 void AddEvent(What what, Device* device, Characteristic* c, Data* d);
 
-// Variables
+/// <summary>	Variables. </summary>
 mutex eventsLock;
+/// <summary>	The events. </summary>
 queue<Event> events;
 
+/// <summary>	The callback lock. </summary>
 mutex callbackLock;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Callback, called when the event. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="ev">	The ev. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void (*eventCallback)(Event ev) = nullptr;
 
+/// <summary>	The advertised lock. </summary>
 mutex advertisedLock;
+/// <summary>	The advertised devices. </summary>
 list<AdvertisedDevice*> advertisedDevices;
 
+/// <summary>	The watcher. </summary>
 BluetoothLEAdvertisementWatcher watcher = BluetoothLEAdvertisementWatcher();
+/// <summary>	True to watcher setup. </summary>
 bool watcherSetup = false;
+/// <summary>	True to thread run. </summary>
 bool threadRun = false;
+/// <summary>	True to thread running. </summary>
 bool threadRunning = false;
 //thread;
 
+/// <summary>	The connected lock. </summary>
 mutex connectedLock;
+/// <summary>	The devices. </summary>
 list<ConnectedDevice*> devices;
 
-// Init / destroy objects
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Init / destroy objects. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 class BluetoothLowEnergyApi
 {
 public:
@@ -84,7 +151,15 @@ public:
 	}
 }BluetoothLowEnergyApiInstance;
 
-// Function - Convert address to string
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Function - Convert address to string. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="addr">	The address. </param>
+///
+/// <returns>	A wstring. </returns>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 wstring addrToString(uint64_t addr)
 {
@@ -99,7 +174,15 @@ wstring addrToString(uint64_t addr)
 	return ret.str();
 }
 
-// Function - Save and print error
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Function - Save and print error. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="message">	The message. </param>
+/// <param name="dev">	  	[in,out] If non-null, the development. </param>
+/// <param name="c">	  	[in,out] If non-null, a Characteristic to process. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void AddError(const char* message, Device * dev , Characteristic *c )
 {
@@ -117,7 +200,15 @@ void AddError(const char* message, Device * dev , Characteristic *c )
 	}
 }
 
-// Function - Events
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Function - Events. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="ev">	[in,out] If non-null, the ev. </param>
+///
+/// <returns>	True if it succeeds, false if it fails. </returns>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DllExport bool PollEvents(Event* ev)
 {
@@ -141,10 +232,26 @@ DllExport bool PollEvents(Event* ev)
 	return false;
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Event callback asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="ev">	The ev. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void eventCallbackAsync(Event ev)
 {
 	eventCallback(ev);
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Adds an event asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="cb">	The cb. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void AddEventAsync(Event cb)
 {
@@ -173,6 +280,14 @@ void AddEventAsync(Event cb)
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Callback, called when the set event. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="callback">	[in,out] If non-null, the callback. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 DllExport void SetEventCallback(void (*callback)(Event ev))
 {
 	try
@@ -187,6 +302,12 @@ DllExport void SetEventCallback(void (*callback)(Event ev))
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Removes the event callback. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 DllExport void RemoveEventCallback()
 {
 	try
@@ -199,6 +320,17 @@ DllExport void RemoveEventCallback()
 		AddError("RemoveEventCallback error: exception caught", nullptr, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Adds an event. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="what">  	The what. </param>
+/// <param name="device">	[in,out] If non-null, the device. </param>
+/// <param name="c">	 	[in,out] If non-null, a Characteristic to process. </param>
+/// <param name="d">	 	[in,out] If non-null, a Data to process. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void AddEvent(What what, Device *device, Characteristic *c, Data *d)
 {
@@ -217,7 +349,13 @@ void AddEvent(What what, Device *device, Characteristic *c, Data *d)
 	}
 }
 
-// Function - Check if bluetooth is enabled
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Function - Check if bluetooth is enabled. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <returns>	True if the bluetooth is enabled, false if not. </returns>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DllExport bool IsBluetoothEnabled()
 {
@@ -251,7 +389,15 @@ DllExport bool IsBluetoothEnabled()
 	return false;
 }
 
-// Functions - Advertised devices
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Functions - Advertised devices. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+///
+/// <returns>	Null if it fails, else the advertised device. </returns>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 AdvertisedDevice* GetAdvertisedDevice(uint64_t deviceAddress)
 {
@@ -273,6 +419,15 @@ AdvertisedDevice* GetAdvertisedDevice(uint64_t deviceAddress)
 
 	return nullptr;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Raises the bluetooth le advertisement received event. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="watcher">  	The watcher. </param>
+/// <param name="eventArgs">	Event information to send to registered event handlers. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothLEAdvertisementReceivedEventArgs eventArgs)
 {
@@ -315,6 +470,12 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Timeout thread. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void timeoutThread()
 {
 	std::chrono::steady_clock::time_point t;
@@ -330,6 +491,7 @@ void timeoutThread()
 				{
 					advertisedDevices.remove(advertisedDevice);
 					delete advertisedDevice;
+					advertisedDevice = nullptr;
 					break;
 				}
 			}
@@ -346,6 +508,12 @@ void timeoutThread()
 	}
 	threadRunning = false;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Starts device scan asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void StartDeviceScanAsync()
 {
@@ -379,6 +547,7 @@ void StartDeviceScanAsync()
 		{
 			AddEvent(What::DISCOVERED_REMOVED, advertisedDevice, nullptr, nullptr);
 			delete advertisedDevice;
+			advertisedDevice = nullptr;
 		}
 
 		advertisedDevices.clear();
@@ -400,6 +569,12 @@ void StartDeviceScanAsync()
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Starts device scan. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 DllExport void StartDeviceScan()
 {
 	try
@@ -411,6 +586,12 @@ DllExport void StartDeviceScan()
 		AddError("StartDeviceScan error: exception caught", nullptr, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Stops device scan asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void StopDeviceScanAsync()
 {
@@ -430,6 +611,12 @@ void StopDeviceScanAsync()
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Stops device scan. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 DllExport void StopDeviceScan()
 {
 	try
@@ -442,6 +629,12 @@ DllExport void StopDeviceScan()
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Clean advertised devices asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void CleanAdvertisedDevicesAsync()
 {
 	try
@@ -451,6 +644,7 @@ void CleanAdvertisedDevicesAsync()
 		{
 			AddEvent(What::DISCOVERED_REMOVED, advDev, nullptr, nullptr);
 			delete advDev;
+			advDev = nullptr;
 		}
 		advertisedDevices.clear();
 	}
@@ -459,6 +653,12 @@ void CleanAdvertisedDevicesAsync()
 		AddError("CleanAdvertisedDevicesAsync error: exception caught", nullptr, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Clean advertised devices. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DllExport void CleanAdvertisedDevices()
 {
@@ -472,7 +672,15 @@ DllExport void CleanAdvertisedDevices()
 	}
 }
 
-// Functions - Connected devices
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Functions - Connected devices. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+///
+/// <returns>	Null if it fails, else the device. </returns>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ConnectedDevice* GetDevice(uint64_t deviceAddress)
 {
@@ -493,6 +701,15 @@ ConnectedDevice* GetDevice(uint64_t deviceAddress)
 	return nullptr;
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Connection status changed event. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="dev">	The development. </param>
+/// <param name="obj">	The object. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj)
 {
 	try
@@ -508,6 +725,7 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 				AddEvent(What::DEVICE_LOST, device, nullptr, nullptr);
 				devices.remove(device);
 				delete device;
+				device = nullptr;
 			}
 			else
 			{
@@ -519,6 +737,7 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 					AddEvent(What::DISCOVERED_REMOVED, advDev, nullptr, nullptr);
 					advertisedDevices.remove(advDev);
 					delete advDev;
+					advDev = nullptr;
 				}
 			}
 		}
@@ -528,6 +747,14 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 		AddError("ConnectionStatusChangedEvent error: exception caught", nullptr, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Connects a device asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void ConnectDeviceAsync(uint64_t deviceAddress)
 {
@@ -573,6 +800,7 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 			AddEvent(What::DEVICE_DISCONNECTED, device, nullptr, nullptr);
 			DisconnectDevice(device);
 			delete device;
+			device = nullptr;
 		}
 	}
 	catch (...)
@@ -580,6 +808,14 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 		AddError("ConnectDeviceAsync error: exception caught", device, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Connects a device. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DllExport void ConnectDevice(uint64_t deviceAddress)
 {
@@ -594,6 +830,16 @@ DllExport void ConnectDevice(uint64_t deviceAddress)
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Disconnects the device described by device. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="device">	[in,out] If non-null, the device. </param>
+///
+/// <returns>	True if it succeeds, false if it fails. </returns>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 bool DisconnectDevice(ConnectedDevice* device)
 {
 	if (device == nullptr) return false;
@@ -607,11 +853,13 @@ bool DisconnectDevice(ConnectedDevice* device)
 		{
 			sub->revoker.revoke();
 			delete sub;
+			sub = nullptr;
 		}
 
 		for (ConnectedCharacteristic* sub : device->characteristics)
 		{
 			delete sub;
+			sub = nullptr;
 		}
 
 		device->subscriptions.clear();
@@ -624,6 +872,14 @@ bool DisconnectDevice(ConnectedDevice* device)
 	}
 	return false;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Disconnects the device asynchronous described by deviceAddress. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void DisconnectDeviceAsync(uint64_t deviceAddress)
 {
@@ -641,6 +897,7 @@ void DisconnectDeviceAsync(uint64_t deviceAddress)
 			}
 			devices.remove(device);
 			delete device;
+			device = nullptr;
 			return;
 		}
 	}
@@ -649,6 +906,14 @@ void DisconnectDeviceAsync(uint64_t deviceAddress)
 		AddError("DisconnectDeviceAsync error: exception caught", device, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Disconnects the device described by deviceAddress. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DllExport void DisconnectDevice(uint64_t deviceAddress)
 {
@@ -662,6 +927,16 @@ DllExport void DisconnectDevice(uint64_t deviceAddress)
 		AddError("DisconnectDevice error: exception caught", nullptr, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Query if 'deviceAddress' is device connected. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+///
+/// <returns>	True if device connected, false if not. </returns>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DllExport bool IsDeviceConnected(uint64_t deviceAddress)
 {
@@ -684,7 +959,16 @@ DllExport bool IsDeviceConnected(uint64_t deviceAddress)
 	return false;
 }
 
-// Functions - Characteristics (for connected devices)
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Functions - Characteristics (for connected devices) </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="dev">   	[in,out] If non-null, the development. </param>
+/// <param name="t_uuid">	The uuid. </param>
+///
+/// <returns>	Null if it fails, else the found characteristic. </returns>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ConnectedCharacteristic *FindCharacteristic(ConnectedDevice* dev, wstring t_uuid)
 {
@@ -711,6 +995,16 @@ ConnectedCharacteristic *FindCharacteristic(ConnectedDevice* dev, wstring t_uuid
 	AddError("FindCharacteristic error: characteristic not found !", dev, nullptr);
 	return nullptr;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Device write asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+/// <param name="uuid">				[in,out] If non-null, the uuid. </param>
+/// <param name="data">				The data. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, Data data)
 {
@@ -765,6 +1059,16 @@ void DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, Data data)
 	AddEvent(What::CHARACTERISTIC_NOT_WRITTEN, device, characteristic, &data);
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Device write. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+/// <param name="uuid">				[in,out] If non-null, the uuid. </param>
+/// <param name="data">				[in,out] If non-null, the data. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 DllExport void DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data)
 {
 	if (deviceAddress == 0)return;
@@ -777,6 +1081,15 @@ DllExport void DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data)
 		AddError("DeviceWrite error: exception caught", nullptr, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Device read asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+/// <param name="uuid">				[in,out] If non-null, the uuid. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 {
@@ -826,6 +1139,15 @@ void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 	AddEvent(What::CHARACTERISTIC_NOT_READED, device, characteristic, nullptr);
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Device read. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+/// <param name="uuid">				[in,out] If non-null, the uuid. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 DllExport void DeviceRead(uint64_t deviceAddress, wchar_t* uuid)
 {
 	if (deviceAddress == 0)return;
@@ -838,6 +1160,15 @@ DllExport void DeviceRead(uint64_t deviceAddress, wchar_t* uuid)
 		AddError("DeviceRead error: exception caught", nullptr, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Device subscribe asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+/// <param name="uuid">				[in,out] If non-null, the uuid. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 {
@@ -898,6 +1229,7 @@ void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 					return;
 				}
 				delete sub;
+				sub = nullptr;
 				AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED, device, characteristic, nullptr);
 				return;
 			}
@@ -912,6 +1244,15 @@ void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 	AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED, device, characteristic, nullptr);
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Device subscribe. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+/// <param name="uuid">				[in,out] If non-null, the uuid. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 DllExport void DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid)
 {
 	if (deviceAddress == 0)return;
@@ -925,6 +1266,14 @@ DllExport void DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid)
 		AddError("DeviceSubscribe error: exception caught", nullptr, nullptr);
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Scans the characteristics asynchronous. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="dev">	[in,out] If non-null, the development. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void ScanCharacteristicsAsync(ConnectedDevice * dev)
 {
@@ -972,7 +1321,11 @@ void ScanCharacteristicsAsync(ConnectedDevice * dev)
 	}
 }
 
-// Function - Clean quit / init
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Function - Clean quit / init. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DllExport void Clean()
 {
@@ -986,6 +1339,7 @@ DllExport void Clean()
 			for (AdvertisedDevice* advDevice : advertisedDevices)
 			{
 				delete advDevice;
+				advDevice = nullptr;
 			}
 			advertisedDevices.clear();
 		}
@@ -995,6 +1349,7 @@ DllExport void Clean()
 			{
 				DisconnectDevice(device);
 				delete device;
+				device = nullptr;
 			}
 			devices.clear();
 		}

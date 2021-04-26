@@ -59,6 +59,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <GenerateXMLDocumentationFiles>true</GenerateXMLDocumentationFiles>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -70,6 +71,11 @@
       </Message>
       <Command>xcopy /y $(TargetPath) $(SolutionDir)BluetoothLowEnergyApiTest</Command>
     </PostBuildEvent>
+    <Xdcmake />
+    <Xdcmake>
+      <AdditionalDocumentFile>
+      </AdditionalDocumentFile>
+    </Xdcmake>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -81,6 +87,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <GenerateXMLDocumentationFiles>true</GenerateXMLDocumentationFiles>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -92,6 +99,11 @@
     <PostBuildEvent>
       <Command>xcopy /y $(TargetPath) $(SolutionDir)BluetoothLowEnergyApiTest</Command>
     </PostBuildEvent>
+    <Xdcmake />
+    <Xdcmake>
+      <AdditionalDocumentFile>
+      </AdditionalDocumentFile>
+    </Xdcmake>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="BluetoothLowEnergyApi.h" />
