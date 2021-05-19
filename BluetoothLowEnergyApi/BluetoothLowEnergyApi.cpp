@@ -774,6 +774,23 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 		device->leDev = BluetoothLEDevice::FromBluetoothAddressAsync(device->address).get();
 		device->revoker = device->leDev.ConnectionStatusChanged(auto_revoke, ConnectionStatusChangedEvent);
 
+		/*if (device->leDev.DeviceInformation().Pairing().CanPair())
+		{
+			cout << "can pair" << endl;
+			device->leDev.DeviceInformation().Pairing().PairAsync(DevicePairingProtectionLevel::Encryption).get();
+			if (device->leDev.DeviceInformation().Pairing().IsPaired())
+			{
+				cout << "is paired" << endl;
+			}
+			else
+			{
+				cout << "is NOT paired" << endl;
+			}
+
+		}*/
+		
+		//
+
 		device->result = device->leDev.GetGattServicesAsync(BluetoothCacheMode::Uncached).get();
 		device->isConnected = device->result.Status() == GattCommunicationStatus::Success;
 
@@ -970,21 +987,21 @@ DllExport bool IsDeviceConnected(uint64_t deviceAddress)
 /// <returns>	Null if it fails, else the found characteristic. </returns>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ConnectedCharacteristic *FindCharacteristic(ConnectedDevice* dev, wstring t_uuid)
+ConnectedCharacteristic* FindCharacteristic(ConnectedDevice* dev, wstring t_uuid)
 {
 	if (dev == nullptr)return nullptr;
 	try
 	{
 		transform(t_uuid.begin(), t_uuid.end(), t_uuid.begin(), towlower);
 		const wchar_t* str = t_uuid.c_str();
-		
+
 		for (list<ConnectedCharacteristic*>::iterator it = dev->characteristics.begin(); it != dev->characteristics.end(); it++)
 		{
 			if (!wcscmp(str, (*it)->uuid))
 			{
 				return (*it);
 			}
-		}		
+		}
 	}
 	catch (...)
 	{
@@ -995,6 +1012,47 @@ ConnectedCharacteristic *FindCharacteristic(ConnectedDevice* dev, wstring t_uuid
 	AddError("FindCharacteristic error: characteristic not found !", dev, nullptr);
 	return nullptr;
 }
+
+//ConnectedCharacteristic* FindCharacteristicEx(ConnectedDevice* dev, wstring t_uuid)
+//{
+//	const wchar_t* str = t_uuid.c_str();
+//
+//	ConnectedCharacteristic* current = nullptr;
+//
+//	if (dev == nullptr) return current;
+//
+//	try
+//	{
+//		IVectorView<GattDeviceService> services = dev->result.Services();
+//		for (GattDeviceService service : services)
+//		{
+//			IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
+//
+//			for (GattCharacteristic characteristic : characteristics)
+//			{
+//				wstring uuidStr = (wstring)to_hstring(characteristic.Uuid());
+//				//wcout << "c" << uuidStr << endl;
+//				current = new ConnectedCharacteristic();
+//				current->isService = false;
+//				current->characteristic = characteristic;
+//				wcscpy_s(current->uuid, sizeof(current->uuid) / sizeof(wchar_t), uuidStr.c_str());
+//
+//				if (!wcscmp(current->uuid, str))
+//				{
+//					return current;
+//				}
+//
+//				delete current;
+//			}
+//		}
+//		AddEvent(What::CHARACTERISTIC_SCAN_OVER, dev, current, nullptr);
+//	}
+//	catch (...)
+//	{
+//		AddError("FindCharacteristicEx error: exception caught", dev, current);
+//	}
+//
+//}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Device write asynchronous. </summary>
@@ -1102,7 +1160,7 @@ void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 	try
 	{
 		{
-			lock_guard lock(connectedLock);
+			//lock_guard lock(connectedLock);
 			device = GetDevice(deviceAddress);
 			if (device == nullptr) return;
 		}
@@ -1114,7 +1172,22 @@ void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 			return;
 		}
 
-		auto val = characteristic->characteristic.ReadValueAsync().get();
+		//std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+		//	std::chrono::system_clock::now().time_since_epoch()
+		//	);
+		//std::cout << "DATA at ;" << ms.count() << ";";
+
+		//auto start = std::chrono::high_resolution_clock::now();
+		auto val = characteristic->characteristic.ReadValueAsync(BluetoothCacheMode::Uncached).get();
+		//auto stop = std::chrono::high_resolution_clock::now();
+		//auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+		//std::cout << "DATA at ;" << duration.count() << ";" << std::endl;
+
+
+		//std::chrono::milliseconds ms2 = std::chrono::duration_cast<std::chrono::milliseconds>(
+		//	std::chrono::system_clock::now().time_since_epoch()
+		//	);
+		//std::cout << ";" << ms2.count() << ";" << std::endl;
 
 		if (val.Status() != GattCommunicationStatus::Success)
 		{
@@ -1127,6 +1200,9 @@ void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 
 		memcpy(data.buf, val.Value().data(), data.size);
 		data.buf[data.size] = '\0';
+
+
+		//std::cout << data.buf << " " << data.size << std::endl;
 
 		AddEvent(What::CHARACTERISTIC_READED, device, characteristic, &data);
 		return;
@@ -1200,7 +1276,7 @@ void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 				sub->characteristic = characteristic;
 
 				// TODO test 
-				// sub->characteristic->characteristic.ProtectionLevel(GattProtectionLevel::EncryptionRequired);
+				//sub->characteristic->characteristic.ProtectionLevel(GattProtectionLevel::EncryptionRequired);
 
 				GattCommunicationStatus status = sub->characteristic->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::Notify).get();
 
@@ -1210,6 +1286,10 @@ void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 						{
 							try
 							{
+								//std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+								//	std::chrono::system_clock::now().time_since_epoch()
+								//	);
+								//std::cout << "DATA at ;" << ms.count() << ";" << args.CharacteristicValue().Length() <<  std::endl;
 								Data cd;
 								cd.size = args.CharacteristicValue().Length();
 								memcpy(cd.buf, args.CharacteristicValue().data(), cd.size);

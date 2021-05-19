@@ -262,7 +262,7 @@
              <param name="uuid">             The uuid. </param>
              <param name="data">             The data. </param>
         </member>
-        <member name="M:BleApi.DeviceRead(System.UInt64,System.String,BleApi.Data@)">
+        <member name="M:BleApi.DeviceRead(System.UInt64,System.String)">
              <summary>   Device read. </summary>
             
              <remarks>   Arrol, 13/04/2021. </remarks>

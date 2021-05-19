@@ -273,7 +273,7 @@ public class BleApi
     ////////////////////////////////////////////////////////////////////////////////////////////////////
 
     [DllImport("BluetoothLowEnergyApi.dll")]
-    public static extern bool PollEvents(out Event ev);
+    public static extern bool PollEvents(ref Event ev);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// <summary>   Callback, called when the set event. </summary>
@@ -411,7 +411,7 @@ public class BleApi
     ////////////////////////////////////////////////////////////////////////////////////////////////////
 
     [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
-    public static extern void DeviceRead(UInt64 deviceAddress, string uuid, ref Data data);
+    public static extern void DeviceRead(UInt64 deviceAddress, string uuid);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// <summary>   Device subscribe. </summary>
