@@ -8,6 +8,16 @@
 /// <summary>	Implements the bluetooth low energy API class. </summary>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+/*
+TODO : check encryption
+check MTU size detection
+fix sharacteristic scan crash on disconnection
+update characteristics on changed
+secure LE device with single semaphore
+find out why there is noise on delay (ble maybe)
+use async / await !!!!
+*/
 #include "pch.h"
 #include "BluetoothLowEnergyApi.h"
 
@@ -87,6 +97,25 @@ struct ConnectedDevice : Device
 	{
 		return addrToString(address) + L" " + (leDev.Name().size() ? wstring(leDev.Name()) : L"");
 	}
+
+	// TODO check better config 
+	bool used = false;
+
+	void startUse()
+	{
+		usersCount++;
+	}
+	void stopUse()
+	{
+		usersCount--;
+	}
+
+	bool isUsed()
+	{
+		return usersCount > 0;
+	}
+
+	uint8_t usersCount = 0;
 };
 
 void ScanCharacteristicsAsync(ConnectedDevice* device);
@@ -369,8 +398,8 @@ DllExport bool IsBluetoothEnabled()
 		//wcout << "c = " << btAdapter.IsLowEnergySupported() << endl;
 		//wcout << "c = " << btAdapter.IsCentralRoleSupported() << endl;
 		//wcout << "c = " << btAdapter.IsPeripheralRoleSupported() << endl;
-		//wcout << "c = " << btAdapter.AreClassicSecureConnectionsSupported() << endl;
-		//wcout << "c = " << btAdapter.AreLowEnergySecureConnectionsSupported() << endl;
+		wcout << "classicSecure = " << btAdapter.AreClassicSecureConnectionsSupported() << endl;
+		wcout << "LeSecure = " << btAdapter.AreLowEnergySecureConnectionsSupported() << endl;
 		//wcout << "c = " << btAdapter.BluetoothAddress() << endl;
 		//wcout << "d_id = " << btAdapter.DeviceId().c_str() << endl;
 
@@ -756,6 +785,11 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 /// <param name="deviceAddress">	The device address. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+void MaxPduSizeChangedEvent(GattSession dev, const IInspectable& obj)
+{
+	cout << "PDU changed to " << dev.MaxPduSize() << endl;
+}
+
 void ConnectDeviceAsync(uint64_t deviceAddress)
 {
 	if (deviceAddress == 0) return;
@@ -774,10 +808,16 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 		device->leDev = BluetoothLEDevice::FromBluetoothAddressAsync(device->address).get();
 		device->revoker = device->leDev.ConnectionStatusChanged(auto_revoke, ConnectionStatusChangedEvent);
 
-		/*if (device->leDev.DeviceInformation().Pairing().CanPair())
+		// TODO : Embed gattsession in connectedDevice ? + check working
+		GattSession  gatt = GattSession::FromDeviceIdAsync(device->leDev.BluetoothDeviceId()).get();
+		std::cout << "MAX PDU SIZE = "<< gatt.MaxPduSize() << endl;
+		gatt.MaxPduSizeChanged(auto_revoke, MaxPduSizeChangedEvent);
+
+
+		if (device->leDev.DeviceInformation().Pairing().CanPair())
 		{
 			cout << "can pair" << endl;
-			device->leDev.DeviceInformation().Pairing().PairAsync(DevicePairingProtectionLevel::Encryption).get();
+			device->leDev.DeviceInformation().Pairing().PairAsync(DevicePairingProtectionLevel::EncryptionAndAuthentication).get();
 			if (device->leDev.DeviceInformation().Pairing().IsPaired())
 			{
 				cout << "is paired" << endl;
@@ -786,8 +826,7 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 			{
 				cout << "is NOT paired" << endl;
 			}
-
-		}*/
+		}
 		
 		//
 
@@ -1366,6 +1405,7 @@ void ScanCharacteristicsAsync(ConnectedDevice * dev)
 		IVectorView<GattDeviceService> services = dev->result.Services();
 		for (GattDeviceService service : services)
 		{
+			if (!dev->isConnected) return;
 			{
 				wstring uuidStr = (wstring)to_hstring(service.Uuid());
 				//wcout << "s" << uuidStr << endl;
@@ -1382,6 +1422,7 @@ void ScanCharacteristicsAsync(ConnectedDevice * dev)
 
 			for (GattCharacteristic characteristic : characteristics)
 			{
+				if (!dev->isConnected) return;
 				wstring uuidStr = (wstring)to_hstring(characteristic.Uuid());
 				//wcout << "c" << uuidStr << endl;
 				current = new ConnectedCharacteristic();

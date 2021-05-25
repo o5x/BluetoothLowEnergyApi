@@ -17,7 +17,9 @@ namespace BluetoothLowEnergyApiTest
         //static readonly string devWriteCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
         //static readonly string devReadCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
         //static string devWriteCharacteristic = "{569a2001-b87f-490c-92cb-11ba5ea5167c}";
-        static string devReadCharacteristic = "{569a2000-b87f-490c-92cb-11ba5ea5167c}";
+        //static string devReadCharacteristic = "{569a2000-b87f-490c-92cb-11ba5ea5167c}";
+
+        static string devReadCharacteristic = "{6E400001 B5A3 F393 E0A9 E50E24DCCA9E}";
         //static string devUartCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
 
         static readonly int deltatimesLen = 20;
