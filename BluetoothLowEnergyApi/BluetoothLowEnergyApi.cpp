@@ -808,13 +808,15 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 		device->leDev = BluetoothLEDevice::FromBluetoothAddressAsync(device->address).get();
 		device->revoker = device->leDev.ConnectionStatusChanged(auto_revoke, ConnectionStatusChangedEvent);
 
+		//GattDeviceService gds = GattDeviceService::
+
 		// TODO : Embed gattsession in connectedDevice ? + check working
-		GattSession  gatt = GattSession::FromDeviceIdAsync(device->leDev.BluetoothDeviceId()).get();
+		/*GattSession  gatt = GattSession::FromDeviceIdAsync(device->leDev.BluetoothDeviceId()).get();
 		std::cout << "MAX PDU SIZE = "<< gatt.MaxPduSize() << endl;
-		gatt.MaxPduSizeChanged(auto_revoke, MaxPduSizeChangedEvent);
+		gatt.MaxPduSizeChanged(auto_revoke, MaxPduSizeChangedEvent);*/
 
 
-		if (device->leDev.DeviceInformation().Pairing().CanPair())
+		/*if (device->leDev.DeviceInformation().Pairing().CanPair())
 		{
 			cout << "can pair" << endl;
 			device->leDev.DeviceInformation().Pairing().PairAsync(DevicePairingProtectionLevel::EncryptionAndAuthentication).get();
@@ -826,7 +828,7 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 			{
 				cout << "is NOT paired" << endl;
 			}
-		}
+		}*/
 		
 		//
 
@@ -901,25 +903,33 @@ bool DisconnectDevice(ConnectedDevice* device)
 	if (device == nullptr) return false;
 	try
 	{
+		cout << "c1" << endl;
+		for (ConnectedSubscription* sub : device->subscriptions)
+		{
+			sub->characteristic->characteristic.Service().Close();
+			//sub->characteristic->characteristic.Service().d
+			sub->revoker.revoke();
+			delete sub;
+			//sub = nullptr;
+		}
+
+		cout << "c2" << endl;
+		for (ConnectedCharacteristic* sub : device->characteristics)
+		{
+			//sub->characteristic.Service().Close();
+			delete sub;
+			//sub = nullptr;
+		}
+
+		//device->subscriptions.clear();
+		//device->characteristics.clear();
+
+		cout << "closing" << endl;
 		device->isConnected = false;
 		device->leDev.Close();
 		device->revoker.revoke();
+		cout << "closed" << endl;
 
-		for (ConnectedSubscription* sub : device->subscriptions)
-		{
-			sub->revoker.revoke();
-			delete sub;
-			sub = nullptr;
-		}
-
-		for (ConnectedCharacteristic* sub : device->characteristics)
-		{
-			delete sub;
-			sub = nullptr;
-		}
-
-		device->subscriptions.clear();
-		device->characteristics.clear();
 		return true;
 	}
 	catch (...)
@@ -1487,5 +1497,35 @@ DllExport void Clean()
 	catch (...)
 	{
 		AddError("Clean error: exception caught", nullptr, nullptr);
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Function - Clean quit / init. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+DllExport void DisconnectAll()
+{
+	try
+	{
+		std::cout << "dc all " << std::endl;
+		lock_guard lock(connectedLock);
+		for (ConnectedDevice* device : devices)
+		{
+			std::wcout << "dc " << device->name << std::endl;
+			DisconnectDevice(device);
+			AddEvent(What::DEVICE_DISCONNECTED, device, nullptr, nullptr);
+			delete device;
+			device = nullptr;
+		}
+		devices.clear();
+
+		std::cout << "ALL DC " << std::endl;
+	}
+	catch (...)
+	{
+		AddError("DisconnectAll error: exception caught", nullptr, nullptr);
 	}
 }

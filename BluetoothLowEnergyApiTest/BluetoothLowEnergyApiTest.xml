@@ -284,6 +284,11 @@
             
              <remarks>   Arrol, 13/04/2021. </remarks>
         </member>
+        <member name="M:BleApi.DisconnectAll">
+             <summary>   Disconnect all devices. </summary>
+            
+             <remarks>   Arrol, 13/04/2021. </remarks>
+        </member>
         <member name="M:BleApi.#ctor">
              <summary>   Consttuctor. </summary>
             

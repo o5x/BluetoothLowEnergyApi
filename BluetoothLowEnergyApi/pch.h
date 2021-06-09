@@ -29,5 +29,6 @@
 #include <map>
 #include <mutex>
 #include <condition_variable>
+#include <sstream>
 
 #endif //PCH_H
