@@ -81,6 +81,12 @@
         <member name="F:BleApi.What.CHARACTERISTIC_NOT_SUBSCRIBED">
             <summary>   An enum constant representing the characteristic not subscribed option. </summary>
         </member>
+        <member name="F:BleApi.What.CHARACTERISTIC_UNSUBSCRIBED">
+            <summary>   An enum constant representing the characteristic unsubscribed option. </summary>
+        </member>
+        <member name="F:BleApi.What.CHARACTERISTIC_NOT_UNSUBSCRIBED">
+            <summary>   An enum constant representing the characteristic not unsubscribed option. </summary>
+        </member>
         <member name="F:BleApi.What.CHARACTERISTIC_NOTIFICATION">
             <summary>   An enum constant representing the characteristic notification option. </summary>
         </member>
@@ -289,8 +295,18 @@
             
              <remarks>   Arrol, 13/04/2021. </remarks>
         </member>
+        <member name="M:BleApi.SetAdertisementFilter(System.UInt16,System.String)">
+             <summary>   Set Scan Filter. </summary>
+            
+             <remarks>   Arrol, 13/04/2021. </remarks>
+        </member>
+        <member name="M:BleApi.RemoveAdertisementFilter">
+             <summary>   Remove Scan Filter. </summary>
+            
+             <remarks>   Arrol, 13/04/2021. </remarks>
+        </member>
         <member name="M:BleApi.#ctor">
-             <summary>   Consttuctor. </summary>
+             <summary>   Constructor. </summary>
             
              <remarks>   Arrol, 13/04/2021. </remarks>
         </member>

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "BluetoothLowEnergyApiTest": {
+      "commandName": "Project",
+      "workingDirectory": "$(SolutionDir)\\x64\\Debug"
+    }
+  }
+}

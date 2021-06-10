@@ -78,6 +78,10 @@ public class BleApi
         CHARACTERISTIC_SUBSCRIBED,
         /// <summary>   An enum constant representing the characteristic not subscribed option. </summary>
         CHARACTERISTIC_NOT_SUBSCRIBED,
+        /// <summary>   An enum constant representing the characteristic unsubscribed option. </summary>
+        CHARACTERISTIC_UNSUBSCRIBED,
+        /// <summary>   An enum constant representing the characteristic not unsubscribed option. </summary>
+        CHARACTERISTIC_NOT_UNSUBSCRIBED,
         /// <summary>   An enum constant representing the characteristic notification option. </summary>
         CHARACTERISTIC_NOTIFICATION
     };
@@ -425,6 +429,10 @@ public class BleApi
     [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
     public static extern void DeviceSubscribe(UInt64 deviceAddress, string uuid);
 
+
+    [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
+    public static extern void DeviceUnSubscribe(UInt64 deviceAddress, string uuid);
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// <summary>   Library clean. </summary>
     ///
@@ -444,10 +452,31 @@ public class BleApi
     public static extern void DisconnectAll();
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    /// <summary>   Consttuctor. </summary>
+    /// <summary>   Set Scan Filter. </summary>
     ///
     /// <remarks>   Arrol, 13/04/2021. </remarks>
     ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
+    public static extern void SetAdertisementFilter(UInt16 CompanyId, string data);
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// <summary>   Remove Scan Filter. </summary>
+    ///
+    /// <remarks>   Arrol, 13/04/2021. </remarks>
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
+    public static extern void RemoveAdertisementFilter();
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// <summary>   Constructor. </summary>
+    ///
+    /// <remarks>   Arrol, 13/04/2021. </remarks>
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
     BleApi()
     {

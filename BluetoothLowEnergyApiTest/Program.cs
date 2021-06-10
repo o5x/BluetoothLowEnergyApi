@@ -13,6 +13,8 @@ namespace BluetoothLowEnergyApiTest
 
         static string devName = "NV-arm-main";
 
+        static UInt64 devAddr = 0;
+
         static DateTime startTime;
         static DateTime lastTime;
 
@@ -211,7 +213,8 @@ namespace BluetoothLowEnergyApiTest
                     //BleApi.DeviceWriteString(btEvent.who.address, devWriteCharacteristic, "Hello Bluetooth ");
                     //BleApi.DeviceWriteString(btEvent.who.address, devWriteCharacteristic, "it is " + timestamp + "\r\n"); 
                     startTime = DateTime.Now;
-                    //BleApi.DeviceSubscribe(btEvent.who.address, devReadCharacteristic);
+                    BleApi.DeviceSubscribe(btEvent.who.address, devReadCharacteristic);
+                    devAddr = btEvent.who.address;
                     //BleApi.DisconnectDevice(btEvent.who.address);
                     break;
             }
@@ -232,6 +235,8 @@ namespace BluetoothLowEnergyApiTest
             // Disable polling and use callback instead - comment to use polling instead
             BleApi.SetEventCallback(ProcessEvent);
 
+            BleApi.SetAdertisementFilter(0x764E, "Neurinnov"); // look for "Nv" manufacturer - content Neurinnov
+            //BleApi.RemoveAdertisementFilter();
             BleApi.StartDeviceScan();
             //Thread.Sleep(100);
             //BleApi.StopDeviceScan();
@@ -261,7 +266,9 @@ namespace BluetoothLowEnergyApiTest
             }*/
             Thread.Sleep(5000);
 
+            BleApi.DeviceUnSubscribe(devAddr, devReadCharacteristic);
 
+            Thread.Sleep(2000);
             // Automatically release all the connected devices
             BleApi.Clean();
 

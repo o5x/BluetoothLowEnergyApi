@@ -113,6 +113,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BluetoothLowEnergyApi.cpp" />
+    <ClCompile Include="BluetoothLowEnergyConnect.cpp" />
     <ClCompile Include="BluetoothLowEnergyScan.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="pch.cpp">

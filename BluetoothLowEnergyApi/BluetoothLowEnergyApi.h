@@ -82,6 +82,10 @@ enum class What
     CHARACTERISTIC_SUBSCRIBED,
     /// <summary>	An enum constant representing the characteristic not subscribed option. </summary>
     CHARACTERISTIC_NOT_SUBSCRIBED,
+    /// <summary>	An enum constant representing the characteristic un subscribed option. </summary>
+    CHARACTERISTIC_UNSUBSCRIBED,
+    /// <summary>	An enum constant representing the characteristic not un subscribed option. </summary>
+    CHARACTERISTIC_NOT_UNSUBSCRIBED,
     /// <summary>	An enum constant representing the characteristic notification option. </summary>
     CHARACTERISTIC_NOTIFICATION
 };
@@ -145,6 +149,27 @@ struct Event
     /// <summary>	The data. </summary>
     Data data;
 };
+
+
+// Local only 
+
+// Scan 
+void RemoveAdvertisedDevice(uint64_t);
+bool GetNameFromAdvertisment(uint64_t deviceAddress, wchar_t* devName);
+void CleanScan();
+
+// Connect
+void CleanConnect();
+
+// base
+std::wstring addrToString(uint64_t addr);
+void AddEvent(What what, Device* device, Characteristic* c, Data* d);
+void AddError(const char* message, Device* dev, Characteristic* c);
+
+
+
+DllExport void RemoveAdertisementFilter();
+DllExport void SetAdertisementFilter(uint16_t CompanyId, wchar_t* data);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Functions. </summary>
@@ -275,6 +300,17 @@ DllExport void DeviceRead(uint64_t deviceAddress, wchar_t* uuid);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DllExport void DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Device unsubscribe. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+/// <param name="uuid">				[in,out] If non-null, the uuid. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+DllExport void DeviceUnSubscribe(uint64_t deviceAddress, wchar_t* uuid);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Clean. </summary>
