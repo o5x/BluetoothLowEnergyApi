@@ -39,10 +39,24 @@ using namespace Windows::Foundation::Collections;
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct ConnectedCharacteristic : Characteristic 
+struct ConnectedCharacteristic : Characteristic
 {
+	ConnectedCharacteristic()
+	{
+		isService = false;
+	}
 	/// <summary>	The characteristic. </summary>
 	GattCharacteristic characteristic = nullptr;
+};
+
+struct ConnectedService : Characteristic
+{
+	ConnectedService()
+	{
+		isService = true;
+	}
+	/// <summary>	The characteristic. </summary>
+	GattDeviceService service = nullptr;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,15 +105,17 @@ struct ConnectedDevice : Device
 	list<ConnectedSubscription*> subscriptions;
 	/// <summary>	The characteristics. </summary>
 	list<ConnectedCharacteristic*> characteristics;
+
+	list<ConnectedService*> services;
 	/// <summary>	True if is connected, false if not. </summary>
 	bool isConnected = false;
-	wstring print()
+	wstring ToString()
 	{
 		return addrToString(address) + L" " + (leDev.Name().size() ? wstring(leDev.Name()) : L"");
 	}
 
 	// TODO check better config 
-	bool used = false;
+	/*bool used = false;
 
 	void startUse()
 	{
@@ -115,10 +131,9 @@ struct ConnectedDevice : Device
 		return usersCount > 0;
 	}
 
-	uint8_t usersCount = 0;
+	uint8_t usersCount = 0;*/
 };
 
-void ScanCharacteristicsAsync(ConnectedDevice* device);
 bool DisconnectDevice(ConnectedDevice* device);
 void AddEvent(What what, Device* device, Characteristic* c, Data* d);
 
@@ -129,6 +144,7 @@ queue<Event> events;
 
 /// <summary>	The callback lock. </summary>
 mutex callbackLock;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Callback, called when the event. </summary>
@@ -168,15 +184,22 @@ list<ConnectedDevice*> devices;
 
 class BluetoothLowEnergyApi
 {
+	_CrtMemState s1;
 public:
 	BluetoothLowEnergyApi()
 	{
+		_CrtMemCheckpoint(&s1);
+		std::cout << "clean leacks = " << _CrtDumpMemoryLeaks() << std::endl;
 		Clean();
 	}
 
 	~BluetoothLowEnergyApi()
 	{
 		Clean();
+		_CrtMemState s2, s3;
+		_CrtMemCheckpoint(&s2);
+		_CrtMemDifference(&s3, &s1, &s2);
+		std::cout << "diff leacks = " << s3.lTotalCount << " = " << _CrtDumpMemoryLeaks() << std::endl;
 	}
 }BluetoothLowEnergyApiInstance;
 
@@ -268,10 +291,19 @@ DllExport bool PollEvents(Event* ev)
 ///
 /// <param name="ev">	The ev. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+void AddEventAsync(Event cb);
 
 void eventCallbackAsync(Event ev)
 {
-	eventCallback(ev);
+	if (eventCallback)
+	{
+		eventCallback(ev);
+	}
+	else
+	{
+		AddEventAsync(ev);
+		cout << "event lost :C  : re-put in queue" << endl;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -370,7 +402,8 @@ void AddEvent(What what, Device *device, Characteristic *c, Data *d)
 		if (device != nullptr)cb.who = *device;
 		if (c != nullptr)cb.characteristic = *c;
 		if (d != nullptr)cb.data = *d;
-		thread(AddEventAsync, cb).detach();
+		AddEventAsync(cb);
+		//thread(AddEventAsync, cb).detach();
 	}
 	catch (...)
 	{
@@ -398,8 +431,8 @@ DllExport bool IsBluetoothEnabled()
 		//wcout << "c = " << btAdapter.IsLowEnergySupported() << endl;
 		//wcout << "c = " << btAdapter.IsCentralRoleSupported() << endl;
 		//wcout << "c = " << btAdapter.IsPeripheralRoleSupported() << endl;
-		wcout << "classicSecure = " << btAdapter.AreClassicSecureConnectionsSupported() << endl;
-		wcout << "LeSecure = " << btAdapter.AreLowEnergySecureConnectionsSupported() << endl;
+		//wcout << "classicSecure = " << btAdapter.AreClassicSecureConnectionsSupported() << endl;
+		//wcout << "LeSecure = " << btAdapter.AreLowEnergySecureConnectionsSupported() << endl;
 		//wcout << "c = " << btAdapter.BluetoothAddress() << endl;
 		//wcout << "d_id = " << btAdapter.DeviceId().c_str() << endl;
 
@@ -683,6 +716,19 @@ void CleanAdvertisedDevicesAsync()
 	}
 }
 
+void RemoveAdvertisedDevice(uint64_t devAddress)
+{
+	lock_guard lock2(advertisedLock);
+	AdvertisedDevice* advDev = GetAdvertisedDevice(devAddress);
+	if (advDev != nullptr)
+	{
+		AddEvent(What::DISCOVERED_REMOVED, advDev, nullptr, nullptr);
+		advertisedDevices.remove(advDev);
+		delete advDev;
+		advDev = nullptr;
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Clean advertised devices. </summary>
 ///
@@ -759,15 +805,7 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 			else
 			{
 				AddEvent(What::DEVICE_CONNECTED, device, nullptr, nullptr);
-				lock_guard lock2(advertisedLock);
-				AdvertisedDevice* advDev = GetAdvertisedDevice(device->address);
-				if (advDev != nullptr)
-				{
-					AddEvent(What::DISCOVERED_REMOVED, advDev, nullptr, nullptr);
-					advertisedDevices.remove(advDev);
-					delete advDev;
-					advDev = nullptr;
-				}
+				RemoveAdvertisedDevice(device->address);
 			}
 		}
 	}
@@ -785,10 +823,10 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 /// <param name="deviceAddress">	The device address. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void MaxPduSizeChangedEvent(GattSession dev, const IInspectable& obj)
+/*void MaxPduSizeChangedEvent(GattSession dev, const IInspectable& obj)
 {
 	cout << "PDU changed to " << dev.MaxPduSize() << endl;
-}
+}*/
 
 void ConnectDeviceAsync(uint64_t deviceAddress)
 {
@@ -808,7 +846,8 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 		device->leDev = BluetoothLEDevice::FromBluetoothAddressAsync(device->address).get();
 		device->revoker = device->leDev.ConnectionStatusChanged(auto_revoke, ConnectionStatusChangedEvent);
 
-		//GattDeviceService gds = GattDeviceService::
+
+		//GattDeviceService gds = GattDeviceService::fr
 
 		// TODO : Embed gattsession in connectedDevice ? + check working
 		/*GattSession  gatt = GattSession::FromDeviceIdAsync(device->leDev.BluetoothDeviceId()).get();
@@ -831,7 +870,7 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 		}*/
 		
 		//
-
+		
 		device->result = device->leDev.GetGattServicesAsync(BluetoothCacheMode::Uncached).get();
 		device->isConnected = device->result.Status() == GattCommunicationStatus::Success;
 
@@ -851,7 +890,50 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 				wstring w = (wstring)device->leDev.Name();
 				wcscpy_s(device->name, sizeof(device->name) / sizeof(wchar_t), w.c_str());
 			}
-			thread(ScanCharacteristicsAsync, device).detach();
+
+			// CHAR SCAN
+			ConnectedCharacteristic* currentC = nullptr;
+			ConnectedService* currentS = nullptr;
+			try
+			{
+				IVectorView<GattDeviceService> services = device->result.Services();
+				for (GattDeviceService service : services)
+				{
+					if (!device->isConnected) return;
+					{
+						wstring uuidStr = (wstring)to_hstring(service.Uuid());
+						//wcout << "s" << uuidStr << endl;
+						currentS = new ConnectedService();
+						currentS->isService = true;
+						currentS->service = service;
+						wcscpy_s(currentS->uuid, sizeof(currentS->uuid) / sizeof(wchar_t), uuidStr.c_str());
+						device->services.push_back(currentS);
+						AddEvent(What::CHARACTERISTIC_SCAN_NEW, device, currentS, nullptr);
+					}
+
+					IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
+
+					for (GattCharacteristic characteristic : characteristics)
+					{
+						if (!device->isConnected) return;
+						wstring uuidStr = (wstring)to_hstring(characteristic.Uuid());
+						//wcout << "c" << uuidStr << endl;
+						currentC = new ConnectedCharacteristic();
+						currentC->isService = false;
+						currentC->characteristic = characteristic;
+						wcscpy_s(currentC->uuid, sizeof(currentC->uuid) / sizeof(wchar_t), uuidStr.c_str());
+						device->characteristics.push_back(currentC);
+						AddEvent(What::CHARACTERISTIC_SCAN_NEW, device, currentC, nullptr);
+					}
+				}
+				AddEvent(What::CHARACTERISTIC_SCAN_OVER, device, nullptr, nullptr);
+			}
+			catch (...)
+			{
+				AddError("ScanCharacteristicsAsync error: exception caught", device, nullptr);
+			}
+
+			// END CHAR SCAN
 		}
 		else
 		{
@@ -903,32 +985,35 @@ bool DisconnectDevice(ConnectedDevice* device)
 	if (device == nullptr) return false;
 	try
 	{
-		cout << "c1" << endl;
 		for (ConnectedSubscription* sub : device->subscriptions)
 		{
 			sub->characteristic->characteristic.Service().Close();
-			//sub->characteristic->characteristic.Service().d
 			sub->revoker.revoke();
 			delete sub;
-			//sub = nullptr;
+			sub = NULL;
 		}
-
-		cout << "c2" << endl;
+		
 		for (ConnectedCharacteristic* sub : device->characteristics)
 		{
-			//sub->characteristic.Service().Close();
 			delete sub;
-			//sub = nullptr;
+			sub = NULL;
+		}
+		
+		for (ConnectedService* sub : device->services)
+		{
+			sub->service.Close();
+			sub->service = NULL;
+			delete sub;
+			sub = NULL;
 		}
 
-		//device->subscriptions.clear();
-		//device->characteristics.clear();
+		device->subscriptions.clear();
+		device->characteristics.clear();
 
-		cout << "closing" << endl;
+		device->revoker.revoke();
 		device->isConnected = false;
 		device->leDev.Close();
-		device->revoker.revoke();
-		cout << "closed" << endl;
+		device->leDev = NULL;
 
 		return true;
 	}
@@ -1062,47 +1147,6 @@ ConnectedCharacteristic* FindCharacteristic(ConnectedDevice* dev, wstring t_uuid
 	return nullptr;
 }
 
-//ConnectedCharacteristic* FindCharacteristicEx(ConnectedDevice* dev, wstring t_uuid)
-//{
-//	const wchar_t* str = t_uuid.c_str();
-//
-//	ConnectedCharacteristic* current = nullptr;
-//
-//	if (dev == nullptr) return current;
-//
-//	try
-//	{
-//		IVectorView<GattDeviceService> services = dev->result.Services();
-//		for (GattDeviceService service : services)
-//		{
-//			IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
-//
-//			for (GattCharacteristic characteristic : characteristics)
-//			{
-//				wstring uuidStr = (wstring)to_hstring(characteristic.Uuid());
-//				//wcout << "c" << uuidStr << endl;
-//				current = new ConnectedCharacteristic();
-//				current->isService = false;
-//				current->characteristic = characteristic;
-//				wcscpy_s(current->uuid, sizeof(current->uuid) / sizeof(wchar_t), uuidStr.c_str());
-//
-//				if (!wcscmp(current->uuid, str))
-//				{
-//					return current;
-//				}
-//
-//				delete current;
-//			}
-//		}
-//		AddEvent(What::CHARACTERISTIC_SCAN_OVER, dev, current, nullptr);
-//	}
-//	catch (...)
-//	{
-//		AddError("FindCharacteristicEx error: exception caught", dev, current);
-//	}
-//
-//}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Device write asynchronous. </summary>
 ///
@@ -1221,22 +1265,7 @@ void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 			return;
 		}
 
-		//std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-		//	std::chrono::system_clock::now().time_since_epoch()
-		//	);
-		//std::cout << "DATA at ;" << ms.count() << ";";
-
-		//auto start = std::chrono::high_resolution_clock::now();
 		auto val = characteristic->characteristic.ReadValueAsync(BluetoothCacheMode::Uncached).get();
-		//auto stop = std::chrono::high_resolution_clock::now();
-		//auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-		//std::cout << "DATA at ;" << duration.count() << ";" << std::endl;
-
-
-		//std::chrono::milliseconds ms2 = std::chrono::duration_cast<std::chrono::milliseconds>(
-		//	std::chrono::system_clock::now().time_since_epoch()
-		//	);
-		//std::cout << ";" << ms2.count() << ";" << std::endl;
 
 		if (val.Status() != GattCommunicationStatus::Success)
 		{
@@ -1249,9 +1278,6 @@ void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 
 		memcpy(data.buf, val.Value().data(), data.size);
 		data.buf[data.size] = '\0';
-
-
-		//std::cout << data.buf << " " << data.size << std::endl;
 
 		AddEvent(What::CHARACTERISTIC_READED, device, characteristic, &data);
 		return;
@@ -1397,62 +1423,6 @@ DllExport void DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Scans the characteristics asynchronous. </summary>
-///
-/// <remarks>	Arrol, 13/04/2021. </remarks>
-///
-/// <param name="dev">	[in,out] If non-null, the development. </param>
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void ScanCharacteristicsAsync(ConnectedDevice * dev)
-{
-	if (dev == nullptr) return;
-
-	ConnectedCharacteristic* current = nullptr;
-
-	try
-	{		
-		IVectorView<GattDeviceService> services = dev->result.Services();
-		for (GattDeviceService service : services)
-		{
-			if (!dev->isConnected) return;
-			{
-				wstring uuidStr = (wstring)to_hstring(service.Uuid());
-				//wcout << "s" << uuidStr << endl;
-				current = new ConnectedCharacteristic();
-				current->isService = true;
-				//current.characteristic = 0;
-				wcscpy_s(current->uuid, sizeof(current->uuid) / sizeof(wchar_t) , uuidStr.c_str());
-				lock_guard lock(connectedLock);
-				dev->characteristics.push_back(current);
-				AddEvent(What::CHARACTERISTIC_SCAN_NEW, dev, current, nullptr);
-			}
-			
-			IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
-
-			for (GattCharacteristic characteristic : characteristics)
-			{
-				if (!dev->isConnected) return;
-				wstring uuidStr = (wstring)to_hstring(characteristic.Uuid());
-				//wcout << "c" << uuidStr << endl;
-				current = new ConnectedCharacteristic();
-				current->isService = false;
-				current->characteristic = characteristic;
-				wcscpy_s(current->uuid, sizeof(current->uuid) / sizeof(wchar_t), uuidStr.c_str());
-				lock_guard lock(connectedLock);
-				dev->characteristics.push_back(current);
-				AddEvent(What::CHARACTERISTIC_SCAN_NEW, dev, current, nullptr);
-			}
-		}
-		AddEvent(What::CHARACTERISTIC_SCAN_OVER, dev, current, nullptr);
-	}
-	catch (...)
-	{
-		AddError("ScanCharacteristicsAsync error: exception caught", dev, current);
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Function - Clean quit / init. </summary>
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
@@ -1461,6 +1431,7 @@ void ScanCharacteristicsAsync(ConnectedDevice * dev)
 DllExport void Clean()
 {
 	StopDeviceScanAsync();
+	
 	try
 	{
 		{
@@ -1486,8 +1457,11 @@ DllExport void Clean()
 		}
 		{
 			lock_guard lock3(eventsLock);
-			std::queue<Event> empty;
-			std::swap(events, empty);
+
+			while (!events.empty())
+			{
+				events.pop();
+			}
 		}
 		{
 			lock_guard lock4(callbackLock);

@@ -203,7 +203,8 @@ namespace BluetoothLowEnergyApiTest
                     run = false;
                     break;
                 case BleApi.What.DEVICE_LOST:
-                    BleApi.StartDeviceScan();
+                    //BleApi.StartDeviceScan();
+                    run = false;
                     break;
                 case BleApi.What.CHARACTERISTIC_SCAN_OVER:
                     //BleApi.DeviceWriteString(btEvent.who.address, devWriteCharacteristic, "+");
@@ -211,7 +212,7 @@ namespace BluetoothLowEnergyApiTest
                     //BleApi.DeviceWriteString(btEvent.who.address, devWriteCharacteristic, "it is " + timestamp + "\r\n"); 
                     startTime = DateTime.Now;
                     //BleApi.DeviceSubscribe(btEvent.who.address, devReadCharacteristic);
-                    BleApi.DisconnectDevice(btEvent.who.address);
+                    //BleApi.DisconnectDevice(btEvent.who.address);
                     break;
             }
         }
@@ -219,7 +220,6 @@ namespace BluetoothLowEnergyApiTest
         static void Main()
         {
             
-
             // Make sure there is no previous instance data (if keeping dll loaded (e.g., Unity))
             BleApi.Clean();
 
@@ -230,7 +230,7 @@ namespace BluetoothLowEnergyApiTest
             }
 
             // Disable polling and use callback instead - comment to use polling instead
-            //BleApi.SetEventCallback(ProcessEvent);
+            BleApi.SetEventCallback(ProcessEvent);
 
             BleApi.StartDeviceScan();
             //Thread.Sleep(100);
@@ -243,12 +243,12 @@ namespace BluetoothLowEnergyApiTest
             {
                 Console.WriteLine("Cancel event triggered");
                 run = false;
-                BleApi.DisconnectAll();
+                //BleApi.DisconnectAll();
                 eventArgs.Cancel = true;
             };
 
             // Main loop
-            while (run)
+            /*while (run)
             {
                 // Poll bluetooth events - not used if callback enabled
                 while (BleApi.PollEvents(ref btEvent))
@@ -258,12 +258,14 @@ namespace BluetoothLowEnergyApiTest
                 }
 
                 Thread.Sleep(5);
-            }
+            }*/
+            Thread.Sleep(5000);
+
 
             // Automatically release all the connected devices
             BleApi.Clean();
 
-            Thread.Sleep(5000);
+            Thread.Sleep(1000);
             return;
         }
     }

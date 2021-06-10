@@ -4,6 +4,7 @@
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="BluetoothLowEnergyApi.cpp" />
+    <ClCompile Include="BluetoothLowEnergyScan.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />

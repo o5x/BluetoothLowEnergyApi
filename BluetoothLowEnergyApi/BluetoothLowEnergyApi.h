@@ -110,8 +110,8 @@ struct Characteristic
 {
     /// <summary>	True if is service, false if not. </summary>
     bool isService = false;
-	/// <summary>	The uuid[ 50]. </summary>
-	wchar_t uuid[50] = L"";
+    /// <summary>	The uuid[ 50]. </summary>
+    wchar_t uuid[50] = L"";
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
