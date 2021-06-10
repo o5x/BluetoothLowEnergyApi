@@ -26,7 +26,7 @@ struct AdvertisedDevice : Device
 };
 
 /// <summary>	The advertised lock. </summary>
-mutex advertisedLock;
+//mutex advertisedLock;
 
 //mutex mtxtest;
 /// <summary>	The advertised devices. </summary>
@@ -103,7 +103,7 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 	{
 		wstring localname = (wstring)eventArgs.Advertisement().LocalName();
 
-		lock_guard lock(advertisedLock);
+		//lock_guard lock(advertisedLock);
 
 		advertisedDevice = GetAdvertisedDevice(eventArgs.BluetoothAddress());
 
@@ -148,7 +148,7 @@ void timeoutThread()
 		try
 		{
 			t = std::chrono::steady_clock::now();
-			lock_guard lock(advertisedLock);
+			//lock_guard lock(advertisedLock);
 			for (AdvertisedDevice* advertisedDevice : advertisedDevices)
 			{
 				if (std::chrono::duration_cast<std::chrono::milliseconds>(t - advertisedDevice->lastAdvertisment).count() > LOST_TIMEOUT_MS)
@@ -174,7 +174,7 @@ void timeoutThread()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Starts device scan asynchronous. </summary>
+/// <summary>	Starts device scan. </summary>
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -197,11 +197,18 @@ DllExport void SetAdertisementFilter(uint16_t CompanyId, wchar_t *data)
 	watcher.AdvertisementFilter().Advertisement().ManufacturerData().Append(manufacturerData);
 }
 
-void StartDeviceScanAsync()
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Starts device scan. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+DllExport void StartDeviceScan()
 {
 	try
 	{
-		lock_guard lock(advertisedLock);
+		//lock_guard lock(advertisedLock);
 		if (!watcherSetup)
 		{
 			watcher.ScanningMode(BluetoothLEScanningMode::Active);
@@ -236,52 +243,11 @@ void StartDeviceScanAsync()
 	}
 	catch (...)
 	{
-		AddError("StartDeviceScanAsync error: exception caught", nullptr, nullptr);
-	}
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Starts device scan. </summary>
-///
-/// <remarks>	Arrol, 13/04/2021. </remarks>
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-DllExport void StartDeviceScan()
-{
-	try
-	{
-		thread(StartDeviceScanAsync).detach();
-	}
-	catch (...)
-	{
 		AddError("StartDeviceScan error: exception caught", nullptr, nullptr);
 	}
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Stops device scan asynchronous. </summary>
-///
-/// <remarks>	Arrol, 13/04/2021. </remarks>
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void StopDeviceScanAsync()
-{
-	try
-	{
-		lock_guard lock(advertisedLock);
-		if (watcherSetup && threadRun)
-		{
-			watcher.Stop();
-			threadRun = false;
-			AddEvent(What::DISCOVERED_STOPPED, nullptr, nullptr, nullptr);
-		}
-	}
-	catch (...)
-	{
-		AddError("StopDeviceScanAsync error: exception caught", nullptr, nullptr);
-	}
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Stops device scan. </summary>
@@ -293,7 +259,13 @@ DllExport void StopDeviceScan()
 {
 	try
 	{
-		thread(StopDeviceScanAsync).detach();
+		//lock_guard lock(advertisedLock);
+		if (watcherSetup && threadRun)
+		{
+			watcher.Stop();
+			threadRun = false;
+			AddEvent(What::DISCOVERED_STOPPED, nullptr, nullptr, nullptr);
+		}
 	}
 	catch (...)
 	{
@@ -302,16 +274,16 @@ DllExport void StopDeviceScan()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Clean advertised devices asynchronous. </summary>
+/// <summary>	Clean advertised devices. </summary>
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void CleanAdvertisedDevicesAsync()
+void CleanAdvertisedDevices()
 {
 	try
 	{
-		lock_guard lock(advertisedLock);
+		//lock_guard lock(advertisedLock);
 		for (AdvertisedDevice* advDev : advertisedDevices)
 		{
 			AddEvent(What::DISCOVERED_REMOVED, advDev, nullptr, nullptr);
@@ -322,13 +294,13 @@ void CleanAdvertisedDevicesAsync()
 	}
 	catch (...)
 	{
-		AddError("CleanAdvertisedDevicesAsync error: exception caught", nullptr, nullptr);
+		AddError("CleanAdvertisedDevices error: exception caught", nullptr, nullptr);
 	}
 }
 
 void RemoveAdvertisedDevice(uint64_t devAddress)
 {
-	lock_guard lock2(advertisedLock);
+	//lock_guard lock2(advertisedLock);
 	AdvertisedDevice* advDev = GetAdvertisedDevice(devAddress);
 	if (advDev != nullptr)
 	{
@@ -340,26 +312,15 @@ void RemoveAdvertisedDevice(uint64_t devAddress)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Clean advertised devices. </summary>
+/// <summary>	Get Name from advertisement </summary>
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-DllExport void CleanAdvertisedDevices()
-{
-	try
-	{
-		thread(CleanAdvertisedDevices).detach();
-	}
-	catch (...)
-	{
-		AddError("CleanAdvertisedDevices error: exception caught", nullptr, nullptr);
-	}
-}
 
 bool GetNameFromAdvertisment(uint64_t deviceAddress, wchar_t * devName)
 {
-	lock_guard lock2(advertisedLock);
+	//lock_guard lock2(advertisedLock);
 	AdvertisedDevice* advDev = GetAdvertisedDevice(deviceAddress);
 	if (advDev != nullptr)
 	{
@@ -373,13 +334,13 @@ bool GetNameFromAdvertisment(uint64_t deviceAddress, wchar_t * devName)
 
 void CleanScan()
 {
-	StopDeviceScanAsync();
+	StopDeviceScan();
 
 	try
 	{
 		{
 			//mtxtest.lock();
-			lock_guard lock(advertisedLock);
+			//lock_guard lock(advertisedLock);
 			//watcher = nullptr;
 
 			if (advertisedDevices.size() > 0)

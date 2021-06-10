@@ -82,32 +82,13 @@ struct ConnectedDevice : Device
 	{
 		return addrToString(address) + L" " + (leDev.Name().size() ? wstring(leDev.Name()) : L"");
 	}
-
-	// TODO check better config 
-	/*bool used = false;
-
-	void startUse()
-	{
-		usersCount++;
-	}
-	void stopUse()
-	{
-		usersCount--;
-	}
-
-	bool isUsed()
-	{
-		return usersCount > 0;
-	}
-
-	uint8_t usersCount = 0;*/
 };
 
 bool DisconnectDevice(ConnectedDevice* device);
 
 
 /// <summary>	The connected lock. </summary>
-mutex connectedLock;
+//mutex connectedLock;
 /// <summary>	The devices. </summary>
 list<ConnectedDevice*> devices;
 
@@ -145,7 +126,7 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 {
 	try
 	{
-		lock_guard lock(connectedLock);
+		//lock_guard lock(connectedLock);
 		ConnectedDevice* device = GetDevice(dev.BluetoothAddress());
 
 		if (device != nullptr && device->isConnected)
@@ -179,38 +160,38 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 /// <param name="deviceAddress">	The device address. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void MaxPduSizeChangedEvent(GattSession dev, const IInspectable& obj)
-{
-	cout << "PDU changed to " << dev.MaxPduSize() << endl;
-}
+//void MaxPduSizeChangedEvent(GattSession dev, const IInspectable& obj)
+//{
+//	cout << "PDU changed to " << dev.MaxPduSize() << endl;
+//}
 
 
-void ConnectDeviceAsync(uint64_t deviceAddress)
+fire_and_forget ConnectDeviceAsync(uint64_t deviceAddress)
 {
-	if (deviceAddress == 0) return;
+	if (deviceAddress == 0) co_return;
 
 	ConnectedDevice* device = nullptr;
 
 	try
 	{
-		lock_guard lock(connectedLock);
+		//lock_guard lock(connectedLock);
 		device = GetDevice(deviceAddress);
 
-		if (device != nullptr) return;
+		if (device != nullptr) co_return;
 
 		device = new ConnectedDevice();
 		device->address = deviceAddress;
-		device->leDev = BluetoothLEDevice::FromBluetoothAddressAsync(device->address).get();
+		device->leDev = co_await BluetoothLEDevice::FromBluetoothAddressAsync(device->address);
 		device->revoker = device->leDev.ConnectionStatusChanged(auto_revoke, ConnectionStatusChangedEvent);
 
 		//GattDeviceService gds = GattDeviceService::FromIdAsync(device->leDev.DeviceId());
 
 		// TODO : Embed gattsession in connectedDevice ? + check working
-		/*GattSession gatt = GattSession::FromDeviceIdAsync(device->leDev.BluetoothDeviceId()).get();
-		std::cout << "MAX PDU SIZE = "<< gatt.MaxPduSize() << endl;
-		gatt.MaxPduSizeChanged(auto_revoke, MaxPduSizeChangedEvent);
-		gatt.Close()*/;
-
+		//GattSession gatt = GattSession::FromDeviceIdAsync(device->leDev.BluetoothDeviceId()).get();
+		//std::cout << "MAX PDU SIZE = "<< gatt.MaxPduSize() << endl;
+		//gatt.MaxPduSizeChanged(auto_revoke, MaxPduSizeChangedEvent);
+		//gatt.Close();
+	
 		/*if (device->leDev.DeviceInformation().Pairing().CanPair())
 		{
 			cout << "can pair" << endl;
@@ -227,7 +208,7 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 
 		//
 
-		device->result = device->leDev.GetGattServicesAsync(BluetoothCacheMode::Uncached).get();
+		device->result = co_await device->leDev.GetGattServicesAsync(BluetoothCacheMode::Uncached);
 		device->isConnected = device->result.Status() == GattCommunicationStatus::Success;
 
 		if (device->isConnected)
@@ -242,7 +223,9 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 				wcscpy_s(device->name, sizeof(device->name) / sizeof(wchar_t), w.c_str());
 			}
 
-			// CHAR SCAN
+			RemoveAdvertisedDevice(device->address);
+			AddEvent(What::DEVICE_CONNECTED, device, nullptr, nullptr);
+
 			ConnectedCharacteristic* currentC = nullptr;
 			ConnectedService* currentS = nullptr;
 			try
@@ -250,7 +233,7 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 				IVectorView<GattDeviceService> services = device->result.Services();
 				for (GattDeviceService service : services)
 				{
-					if (!device->isConnected) return;
+					if (!device->isConnected) co_return;
 					{
 						wstring uuidStr = (wstring)to_hstring(service.Uuid());
 						//wcout << "s" << uuidStr << endl;
@@ -262,11 +245,12 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 						AddEvent(What::CHARACTERISTIC_SCAN_NEW, device, currentS, nullptr);
 					}
 
-					IVectorView<GattCharacteristic> characteristics = service.GetCharacteristicsAsync().get().Characteristics();
+					IGattCharacteristicsResult r = co_await service.GetCharacteristicsAsync();
+					IVectorView<GattCharacteristic> characteristics = r.Characteristics();
 
 					for (GattCharacteristic characteristic : characteristics)
 					{
-						if (!device->isConnected) return;
+						if (!device->isConnected) co_return;
 						wstring uuidStr = (wstring)to_hstring(characteristic.Uuid());
 						//wcout << "c" << uuidStr << endl;
 						currentC = new ConnectedCharacteristic();
@@ -283,8 +267,6 @@ void ConnectDeviceAsync(uint64_t deviceAddress)
 			{
 				AddError("ScanCharacteristicsAsync error: exception caught", device, nullptr);
 			}
-
-			// END CHAR SCAN
 		}
 		else
 		{
@@ -313,7 +295,7 @@ DllExport void ConnectDevice(uint64_t deviceAddress)
 	if (deviceAddress == 0)return;
 	try
 	{
-		thread(ConnectDeviceAsync, deviceAddress).detach();
+		ConnectDeviceAsync(deviceAddress);
 	}
 	catch (...)
 	{
@@ -376,20 +358,20 @@ bool DisconnectDevice(ConnectedDevice* device)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Disconnects the device asynchronous described by deviceAddress. </summary>
+/// <summary>	Disconnects the device described by deviceAddress. </summary>
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ///
 /// <param name="deviceAddress">	The device address. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void DisconnectDeviceAsync(uint64_t deviceAddress)
+void DisconnectDevice(uint64_t deviceAddress)
 {
 	if (deviceAddress == 0) return;
 	ConnectedDevice* device = nullptr;
 	try
 	{
-		lock_guard lock(connectedLock);
+		//lock_guard lock(connectedLock);
 		device = GetDevice(deviceAddress);
 		if (device != nullptr)
 		{
@@ -410,27 +392,6 @@ void DisconnectDeviceAsync(uint64_t deviceAddress)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Disconnects the device described by deviceAddress. </summary>
-///
-/// <remarks>	Arrol, 13/04/2021. </remarks>
-///
-/// <param name="deviceAddress">	The device address. </param>
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-DllExport void DisconnectDevice(uint64_t deviceAddress)
-{
-	if (deviceAddress == 0)return;
-	try
-	{
-		thread(DisconnectDeviceAsync, deviceAddress).detach();
-	}
-	catch (...)
-	{
-		AddError("DisconnectDevice error: exception caught", nullptr, nullptr);
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Query if 'deviceAddress' is device connected. </summary>
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
@@ -446,7 +407,7 @@ DllExport bool IsDeviceConnected(uint64_t deviceAddress)
 	ConnectedDevice* device = nullptr;
 	try
 	{
-		lock_guard lock(connectedLock);
+		//lock_guard lock(connectedLock);
 		device = GetDevice(deviceAddress);
 		if (device != nullptr)
 		{
@@ -508,11 +469,11 @@ ConnectedCharacteristic* FindCharacteristic(ConnectedDevice* dev, wstring t_uuid
 /// <param name="data">				The data. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, Data data)
+fire_and_forget DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, Data data)
 {
-	if (deviceAddress == 0)return;
-	if (uuid == nullptr) return;
-	if (data.buf == nullptr)return;
+	if (deviceAddress == 0)co_return;
+	if (uuid == nullptr) co_return;
+	if (data.buf == nullptr)co_return;
 
 	ConnectedDevice* device = nullptr;
 	ConnectedCharacteristic* characteristic = nullptr;
@@ -520,13 +481,13 @@ void DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, Data data)
 	try
 	{
 		{
-			lock_guard lock(connectedLock);
+			//lock_guard lock(connectedLock);
 			device = GetDevice(deviceAddress);
 
 			if (device == nullptr)
 			{
 				AddEvent(What::CHARACTERISTIC_NOT_WRITTEN, device, characteristic, &data);
-				return;
+				co_return;
 			}
 		}
 
@@ -534,23 +495,23 @@ void DeviceWriteAsync(uint64_t deviceAddress, wchar_t* uuid, Data data)
 		if (characteristic == nullptr)
 		{
 			AddEvent(What::CHARACTERISTIC_NOT_WRITTEN, device, characteristic, &data);
-			return;
+			co_return;
 		}
 
 		array_view<uint8_t> av(data.buf, data.size);
 		auto writer = DataWriter();
 		writer.WriteBytes(av);
 
-		auto status = characteristic->characteristic.WriteValueWithResultAsync(writer.DetachBuffer(), GattWriteOption::WriteWithoutResponse).get();
+		auto status = co_await characteristic->characteristic.WriteValueWithResultAsync(writer.DetachBuffer(), GattWriteOption::WriteWithoutResponse);
 		if (status.Status() == GattCommunicationStatus::Success)
 		{
 			AddEvent(What::CHARACTERISTIC_WRITTEN, device, characteristic, &data);
-			return;
+			co_return;
 		}
 		else
 		{
 			AddEvent(What::CHARACTERISTIC_NOT_WRITTEN, device, characteristic, &data);
-			return;
+			co_return;
 		}
 	}
 	catch (...)
@@ -576,7 +537,8 @@ DllExport void DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data)
 	if (deviceAddress == 0)return;
 	try
 	{
-		thread(DeviceWriteAsync, deviceAddress, uuid, *data).detach();
+		DeviceWriteAsync(deviceAddress, uuid, *data);
+		//thread(DeviceWriteAsync, deviceAddress, uuid, *data).detach();
 	}
 	catch (...)
 	{
@@ -593,10 +555,10 @@ DllExport void DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data)
 /// <param name="uuid">				[in,out] If non-null, the uuid. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
+fire_and_forget DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 {
-	if (deviceAddress == 0)return;
-	if (uuid == nullptr) return;
+	if (deviceAddress == 0)co_return;
+	if (uuid == nullptr) co_return;
 
 	ConnectedDevice* device = nullptr;
 	ConnectedCharacteristic* characteristic = nullptr;
@@ -604,24 +566,24 @@ void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 	try
 	{
 		{
-			//lock_guard lock(connectedLock);
+			////lock_guard lock(connectedLock);
 			device = GetDevice(deviceAddress);
-			if (device == nullptr) return;
+			if (device == nullptr) co_return;
 		}
 
 		characteristic = FindCharacteristic(device, uuid);
 		if (characteristic == nullptr)
 		{
 			AddEvent(What::CHARACTERISTIC_NOT_READED, device, characteristic, nullptr);
-			return;
+			co_return;
 		}
 
-		auto val = characteristic->characteristic.ReadValueAsync(BluetoothCacheMode::Uncached).get();
+		auto val = co_await characteristic->characteristic.ReadValueAsync(BluetoothCacheMode::Uncached);
 
 		if (val.Status() != GattCommunicationStatus::Success)
 		{
 			AddEvent(What::CHARACTERISTIC_NOT_READED, device, characteristic, nullptr);
-			return;
+			co_return;
 		}
 
 		Data data;
@@ -631,7 +593,7 @@ void DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 		data.buf[data.size] = '\0';
 
 		AddEvent(What::CHARACTERISTIC_READED, device, characteristic, &data);
-		return;
+		co_return;
 	}
 	catch (...)
 	{
@@ -655,7 +617,8 @@ DllExport void DeviceRead(uint64_t deviceAddress, wchar_t* uuid)
 	if (deviceAddress == 0)return;
 	try
 	{
-		thread(DeviceReadAsync, deviceAddress, uuid).detach();
+		DeviceReadAsync(deviceAddress, uuid);
+		//thread(DeviceReadAsync, deviceAddress, uuid).detach();
 	}
 	catch (...)
 	{
@@ -671,15 +634,15 @@ DllExport void DeviceRead(uint64_t deviceAddress, wchar_t* uuid)
 /// <param name="deviceAddress">	The device address. </param>
 /// <param name="uuid">				[in,out] If non-null, the uuid. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
+fire_and_forget DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 {
-	if (deviceAddress == 0) return;
+	if (deviceAddress == 0) co_return;
 	ConnectedDevice* device = nullptr;
 	ConnectedCharacteristic* characteristic = nullptr;
 
 	try
 	{
-		lock_guard lock(connectedLock);
+		//lock_guard lock(connectedLock);
 		device = GetDevice(deviceAddress);
 
 		if (device != nullptr)
@@ -693,7 +656,7 @@ void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 				{
 					if (sub->characteristic->characteristic.Uuid() == characteristic->characteristic.Uuid())
 					{
-						return;
+						co_return;
 					}
 				}
 
@@ -703,7 +666,7 @@ void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 				// TODO test 
 				//sub->characteristic->characteristic.ProtectionLevel(GattProtectionLevel::EncryptionRequired);
 
-				GattCommunicationStatus status = sub->characteristic->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::Notify).get();
+				GattCommunicationStatus status = co_await sub->characteristic->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::Notify);
 
 				if (status == GattCommunicationStatus::Success)
 				{
@@ -715,6 +678,7 @@ void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 								//	std::chrono::system_clock::now().time_since_epoch()
 								//	);
 								//std::cout << "DATA at ;" << ms.count() << ";" << args.CharacteristicValue().Length() <<  std::endl;
+
 								Data cd;
 								cd.size = args.CharacteristicValue().Length();
 								memcpy(cd.buf, args.CharacteristicValue().data(), cd.size);
@@ -725,21 +689,20 @@ void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 							{
 								AddError("DeviceSubscribeAsync ValueChanged error: exception caught", device, sub->characteristic);
 							}
-
 							return;
 						});
 
 					device->subscriptions.push_back(sub);
 					AddEvent(What::CHARACTERISTIC_SUBSCRIBED, device, characteristic, nullptr);
-					return;
+					co_return;
 				}
 				delete sub;
 				sub = nullptr;
 				AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED, device, characteristic, nullptr);
-				return;
+				co_return;
 			}
 			AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED, device, characteristic, nullptr);
-			return;
+			co_return;
 		}
 	}
 	catch (...)
@@ -749,15 +712,15 @@ void DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 	AddEvent(What::CHARACTERISTIC_NOT_SUBSCRIBED, device, characteristic, nullptr);
 }
 
-void DeviceUnSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
+fire_and_forget DeviceUnSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 {
-	if (deviceAddress == 0) return;
+	if (deviceAddress == 0) co_return;
 	ConnectedDevice* device = nullptr;
 	ConnectedCharacteristic* characteristic = nullptr;
 
 	try
 	{
-		lock_guard lock(connectedLock);
+		//lock_guard lock(connectedLock);
 		device = GetDevice(deviceAddress);
 
 		if (device != nullptr)
@@ -772,21 +735,21 @@ void DeviceUnSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 					if (sub->characteristic->characteristic.Uuid() == characteristic->characteristic.Uuid())
 					{
 						
-						GattCommunicationStatus status = sub->characteristic->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::None).get();
+						GattCommunicationStatus status = co_await sub->characteristic->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::None);
 						if (status == GattCommunicationStatus::Success)
 						{
 							sub->characteristic->characteristic.Service().Close();
 							device->subscriptions.remove(sub);
 							AddEvent(What::CHARACTERISTIC_UNSUBSCRIBED, device, characteristic, nullptr);
-							return;
+							co_return;
 						}
 					}
 				}
 				AddEvent(What::CHARACTERISTIC_NOT_UNSUBSCRIBED, device, characteristic, nullptr);
-				return;
+				co_return;
 			}
 			AddEvent(What::CHARACTERISTIC_NOT_UNSUBSCRIBED, device, characteristic, nullptr);
-			return;
+			co_return;
 		}
 	}
 	catch (...)
@@ -811,7 +774,7 @@ DllExport void DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid)
 	if (uuid == nullptr)return;
 	try
 	{
-		thread(DeviceSubscribeAsync, deviceAddress, uuid).detach();
+		DeviceSubscribeAsync(deviceAddress, uuid);
 	}
 	catch (...)
 	{
@@ -825,7 +788,7 @@ DllExport void DeviceUnSubscribe(uint64_t deviceAddress, wchar_t* uuid)
 	if (uuid == nullptr)return;
 	try
 	{
-		thread(DeviceUnSubscribeAsync, deviceAddress, uuid).detach();
+		DeviceUnSubscribeAsync(deviceAddress, uuid);
 	}
 	catch (...)
 	{
@@ -837,18 +800,16 @@ void CleanConnect()
 {
 	try
 	{
+		//lock_guard lock(connectedLock);
+		if (devices.size() > 0)
 		{
-			lock_guard lock(connectedLock);
-			if (devices.size() > 0)
+			for (ConnectedDevice* device : devices)
 			{
-				for (ConnectedDevice* device : devices)
-				{
-					DisconnectDevice(device);
-					delete device;
-					device = nullptr;
-				}
-				devices.clear();
+				DisconnectDevice(device);
+				delete device;
+				device = nullptr;
 			}
+			devices.clear();
 		}
 	}
 	catch (...)
@@ -867,7 +828,7 @@ DllExport void DisconnectAll()
 {
 	try
 	{
-		lock_guard lock(connectedLock);
+		//lock_guard lock(connectedLock);
 		for (ConnectedDevice* device : devices)
 		{
 			DisconnectDevice(device);

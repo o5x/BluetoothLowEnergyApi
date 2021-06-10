@@ -14,7 +14,9 @@ TODO : check encryption
 check MTU size detection
 update characteristics on changed ?
 secure LE device with single semaphore
-use async / await !!!!
+unsubscribe from all characteristics / devices (putting null or empty value)
+check ressouce protection with mutexes ?
+fix unsubscribe after disconnection
 */
 #include "pch.h"
 #include "BluetoothLowEnergyApi.h"
@@ -247,7 +249,7 @@ void AddEvent(What what, Device *device, Characteristic *c, Data *d)
 		if (c != nullptr)cb.characteristic = *c;
 		if (d != nullptr)cb.data = *d;
 		//AddEventAsync(cb);
-		thread(AddEventAsync, cb).detach();
+		AddEventAsync(cb);
 	}
 	catch (...)
 	{
