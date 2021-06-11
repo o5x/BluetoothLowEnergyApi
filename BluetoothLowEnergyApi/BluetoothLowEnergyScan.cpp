@@ -247,8 +247,6 @@ DllExport void StartDeviceScan()
 	}
 }
 
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Stops device scan. </summary>
 ///
@@ -298,6 +296,13 @@ void CleanAdvertisedDevices()
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Remove advertised device from list </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RemoveAdvertisedDevice(uint64_t devAddress)
 {
 	//lock_guard lock2(advertisedLock);
@@ -317,7 +322,6 @@ void RemoveAdvertisedDevice(uint64_t devAddress)
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 bool GetNameFromAdvertisment(uint64_t deviceAddress, wchar_t * devName)
 {
 	//lock_guard lock2(advertisedLock);
@@ -331,6 +335,11 @@ bool GetNameFromAdvertisment(uint64_t deviceAddress, wchar_t * devName)
 	return false;
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Clean </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void CleanScan()
 {
@@ -338,21 +347,18 @@ void CleanScan()
 
 	try
 	{
-		{
-			//mtxtest.lock();
-			//lock_guard lock(advertisedLock);
-			//watcher = nullptr;
+		//mtxtest.lock();
+		//lock_guard lock(advertisedLock);
 
-			if (advertisedDevices.size() > 0)
+		if (advertisedDevices.size() > 0)
+		{
+			for (AdvertisedDevice* advDevice : advertisedDevices)
 			{
-				for (AdvertisedDevice* advDevice : advertisedDevices)
-				{
-					delete advDevice;
-					advDevice = nullptr;
-				}
-				advertisedDevices.clear();
-			}			
-		}
+				delete advDevice;
+				advDevice = nullptr;
+			}
+			advertisedDevices.clear();
+		}			
 	}
 	catch (...)
 	{

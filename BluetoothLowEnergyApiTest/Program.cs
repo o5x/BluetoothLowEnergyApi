@@ -1,162 +1,75 @@
 ﻿using System;
-using System.Numerics;
 using System.Threading;
-
 
 namespace BluetoothLowEnergyApiTest
 {
     class Program
     {
+        // Global exit condition
         static bool run = true;
 
-        static string devName = "NV-arm-main";
-        static UInt64 devAddr = 0;
+        // Target device
+        static string deviceName = "NV-arm";
 
-        static DateTime startTime;
-        static DateTime lastTime;
-
-        //static readonly string devWriteCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
-        //static readonly string devReadCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
-        //static string devWriteCharacteristic = "{569a2001-b87f-490c-92cb-11ba5ea5167c}";
-
-        static string UART_TX = "{6e400002-b5a3-f393-e0a9-e50e24dcca9e}";
-        static string UART_RX = "{6e400003-b5a3-f393-e0a9-e50e24dcca9e}";
+        // Characteristics
+        static string UART_RX = "{6e400002-b5a3-f393-e0a9-e50e24dcca9e}";
+        static string UART_TX = "{6e400003-b5a3-f393-e0a9-e50e24dcca9e}";
 
         static string BAT_LVL = "{00002a19-0000-1000-8000-00805f9b34fb}";
+        static string BAT_VOLTAGE = "{00002b18-0000-1000-8000-00805f9b34fb}";
+        static string BAT_TEMP = "{00002a6e-0000-1000-8000-00805f9b34fb}";
+
         static string RSSI_PWR = "{00002a07-0000-1000-8000-00805f9b34fb}";
-        static string MES_ITV = "{00002a21-0000-1000-8000-00805f9b34fb}";
+
+        // Compute times
+        static DateTime startTime;
+        static DateTime lastTime;
 
         static readonly int deltatimesLen = 20;
         static double[] deltatimes = new double[deltatimesLen];
         static int indexDeltaTimes = 0;
         static double avgDeltaTime = 0;
 
-        static Quaternion q1 = Quaternion.Identity;
-        static Quaternion q2 = Quaternion.Identity;
-
-        //public static void decodeIMU(byte[] buf, int id, int offset)
-        //{
-        //    float w = BitConverter.ToSingle(buf, 0 + offset);    // q3 
-        //    float x = BitConverter.ToSingle(buf, 4 + offset);    // q0
-        //    float y = BitConverter.ToSingle(buf, 8 + offset);    // q1
-        //    float z = BitConverter.ToSingle(buf, 12 + offset);   // q2
-
-        //    //Console.WriteLine(" w " + w + " x " + x + " y = " + y + " z = " + z );
-
-        //    float ya = MathF.Atan2((2 * x * y - 2 * w * z), (2 * w * w + 2 * x * x - 1)) * degScale;
-        //    float p = -MathF.Asin(2 * x * z + 2 * w * y) * degScale;
-        //    float r = MathF.Atan2((2 * y * z - 2 * w * x), (2 * w * w + 2 * z * z - 1)) * degScale;
-
-        //    Console.Write(" IMU" + id);
-        //    Console.Write("; " + String.Format("{0,6:0.0}", r));
-        //    Console.Write("; " + String.Format("{0,6:0.0}", p));
-        //    Console.Write("; " + String.Format("{0,6:0.0}", ya));
-        //    Console.Write(";     ;");
-        //}
-
-        //public static void decodeIMU16(byte[] buf, int id, int offset)
-        //{
-        //    float w = (float)BitConverter.ToInt16(buf, 0 + offset) / 16384f;
-        //    float x = (float)BitConverter.ToInt16(buf, 2 + offset) / 16384f;
-        //    float y = (float)BitConverter.ToInt16(buf, 4 + offset) / 16384f;
-        //    float z = (float)BitConverter.ToInt16(buf, 6 + offset) / 16384f;
-
-        //    //Console.WriteLine(" w " + w + " x " + x + " y = " + y + " z = " + z );
-
-        //    float ya = MathF.Atan2((2 * x * y - 2 * w * z), (2 * w * w + 2 * x * x - 1)) * degScale;
-        //    float p = -MathF.Asin(2 * x * z + 2 * w * y) * degScale;
-        //    float r = MathF.Atan2((2 * y * z - 2 * w * x), (2 * w * w + 2 * z * z - 1)) * degScale;
-
-        //    Console.Write(" IMU" + id);
-        //    Console.Write("; " + String.Format("{0,6:0.0}", r));
-        //    Console.Write("; " + String.Format("{0,6:0.0}", p));
-        //    Console.Write("; " + String.Format("{0,6:0.0}", ya));
-        //    Console.Write(";     ;");
-        //}
-
-        public static Vector3 decodeVector3(byte[] buf, int offset, float scale)
-        {
-            float x = (float)BitConverter.ToInt16(buf, 0 + offset) * scale;
-            float y = (float)BitConverter.ToInt16(buf, 2 + offset) * scale;
-            float z = (float)BitConverter.ToInt16(buf, 4 + offset) * scale;
-            return new Vector3(x, y, z);
-        }
-
-        public static void decodeIMUraw(byte[] buf, int offset, ref Quaternion q)
-        {
-            Vector3 m = decodeVector3(buf, offset, 0.000061f);
-            Vector3 g = decodeVector3(buf, offset + 8, 0.070000f * MathF.PI / 180f);
-            Vector3 a = decodeVector3(buf, offset + 14, 0.3f);
-
-            float imu_time = (((UInt32)buf[21 + offset] << 0 | (UInt32)buf[22 + offset] << 8 | (UInt32)buf[23 + offset] << 16)) / 39.0f;
-
-            MadgwickAHRS.update(g, a, m, ref q, 0.01f);
-        }
-
-        public static void printIMU(Quaternion q)
-        {
-            Vector3 euler = MadgwickAHRS.toEuler(q);
-
-            Console.Write(" IMU");
-            Console.Write("; " + String.Format("{0,6:0.0}", euler.X));
-            Console.Write("; " + String.Format("{0,6:0.0}", euler.Y));
-            Console.Write("; " + String.Format("{0,6:0.0}", euler.Z));
-            //Console.Write("; " + String.Format("{0,6:0.0}", imu_time));
-            Console.Write(";     ");
-        }
-
+        // IMUs
+        static IMU imu1 = new IMU(1);
+        static IMU imu2 = new IMU(2);
+ 
         public static void ProcessEvent(BleApi.Event btEvent)
         {            
             if(btEvent.what == BleApi.What.CHARACTERISTIC_NOTIFICATION)
             {
-                if(btEvent.characteristic.uuid == BAT_LVL)
+                if (btEvent.characteristic.uuid == BAT_LVL)
                 {
-                    int bat = BitConverter.ToInt16(btEvent.data.buf, 0);
-                    Console.WriteLine(" BAT = " + bat + " %");
+                    Int16 bat = BitConverter.ToInt16(btEvent.data.buf, 0);
+                    Console.WriteLine(" Battery level = " + bat + " %");
+                }
+                if (btEvent.characteristic.uuid == BAT_VOLTAGE)
+                {
+                    Int16 v = BitConverter.ToInt16(btEvent.data.buf, 0);
+                    Console.WriteLine(" Battery voltage = " + v + " mv");
+                }
+                if (btEvent.characteristic.uuid == BAT_TEMP)
+                {
+                    Int16 t = BitConverter.ToInt16(btEvent.data.buf, 0);
+                    Console.WriteLine(" Battery temp = " + t / 10.0 + " deg");
                 }
                 else if (btEvent.characteristic.uuid == RSSI_PWR)
                 {
-                    int rssi = BitConverter.ToInt16(btEvent.data.buf, 0);
+                    Int16 rssi = BitConverter.ToInt16(btEvent.data.buf, 0);
                     Console.WriteLine(" RSSI = " + rssi + " dbm");
                 }
-                else if (btEvent.characteristic.uuid == UART_RX)
+                else if (btEvent.characteristic.uuid == UART_TX)
                 {
-                    //long milliseconds = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-                    //Console.WriteLine(" " + milliseconds + " : " ); // + System.Text.Encoding.Default.GetString(btEvent.data.buf)
-
-                    //if (btEvent.data.size == 26)
-                    //{
-                    //    decodeIMUraw(btEvent.data.buf, 1, ref q1);
-                    //    Console.WriteLine("");
-                    //    return;
-                    //}
-
-                    //if (btEvent.data.size == 50)
-                    //{
-                    //    decodeIMUraw(btEvent.data.buf, 1, ref q1);
-                    //    decodeIMUraw(btEvent.data.buf, 25, ref q2);
-                    //    Console.WriteLine("");
-                    //    return;
-                    //}
-
-                    //if (btEvent.data.size == 34)
-                    //{
-                    //    Console.WriteLine("Incorrect Length " + btEvent.data.size);
-                    //    return;
-                    //    decodeIMU(btEvent.data.buf, 1, 1);
-                    //    decodeIMU(btEvent.data.buf, 2, 16 + 1);
-                    //}
-
                     if (btEvent.data.size == 240)
                     {
                         for (int i = 0; i < 5; i++)
                         {
-                            decodeIMUraw(btEvent.data.buf, 0 + i * 48, ref q1);
-                            decodeIMUraw(btEvent.data.buf, 24 + i * 48, ref q2);
+                            imu1.update(btEvent.data.buf, 0 + i * 48);
+                            imu2.update(btEvent.data.buf, 24 + i * 48);
                         }
 
-                        printIMU(q1);
-                        printIMU(q2);                        
+                        Console.Write(imu1.ToString());
+                        Console.Write(imu2.ToString());                 
                     }
 
                     // Compute Average time
@@ -192,7 +105,6 @@ namespace BluetoothLowEnergyApiTest
 
                     Console.WriteLine(String.Format("{0,10:0.00}", time.TotalMilliseconds) + ";" + String.Format("{0,10:0.00}", dt.TotalMilliseconds) + ";" + String.Format("{0,10:0.00}", avgDeltaTime) + ";");
                 }
-
                 return;
             }
 
@@ -205,42 +117,32 @@ namespace BluetoothLowEnergyApiTest
             {
                 case BleApi.What.DISCOVERED_NEW:
                 case BleApi.What.DISCOVERED_UPDATED:
-                    if (btEvent.who.name == devName)
+                    if (btEvent.who.name == deviceName)
                     {
                         BleApi.ConnectDevice(btEvent.who.address);
                     }
                     break;
                 case BleApi.What.DEVICE_CONNECTED:
                     BleApi.StopDeviceScan();
-                    devAddr = btEvent.who.address;
                     break;
                 case BleApi.What.DEVICE_DISCONNECTED:
                     run = false;
                     break;
                 case BleApi.What.DEVICE_LOST:
-                    //BleApi.StartDeviceScan();
                     run = false;
                     break;
-                case BleApi.What.CHARACTERISTIC_UNSUBSCRIBED:
-                    BleApi.DisconnectDevice(btEvent.who.address);
-                    break;
                 case BleApi.What.CHARACTERISTIC_SCAN_OVER:
-                    BleApi.DeviceWriteString(btEvent.who.address, UART_TX, "+");
-                    BleApi.DeviceWriteString(btEvent.who.address, UART_TX, "Hello Bluetooth ");
-                    BleApi.DeviceWriteString(btEvent.who.address, UART_TX, "it is " + timestamp + "\r\n"); 
                     startTime = DateTime.Now;
-                    BleApi.DeviceSubscribe(btEvent.who.address, UART_RX);
-                    BleApi.DeviceSubscribe(btEvent.who.address, BAT_LVL);
-                    BleApi.DeviceSubscribe(btEvent.who.address, RSSI_PWR);
 
-                    // Update refresh rate
-                    //BleApi.Data data = new BleApi.Data();
-                    //Byte [] b = BitConverter.GetBytes((Int16)100);
-                    //data.buf = new byte[512];
-                    //data.buf[0] = b[0];
-                    //data.buf[1] = b[1];
-                    //data.size = 2;
-                    //BleApi.DeviceWrite(btEvent.who.address, MES_ITV, ref data);
+                    BleApi.DeviceWriteString(btEvent.who.address, UART_RX, "+");
+                    //BleApi.DeviceWriteString(btEvent.who.address, UART_RX, "Hello Bluetooth ");
+                    //BleApi.DeviceWriteString(btEvent.who.address, UART_RX, "it is " + timestamp + "\r\n"); 
+                    
+                    BleApi.DeviceSubscribe(btEvent.who.address, UART_TX);
+                    //BleApi.DeviceSubscribe(btEvent.who.address, BAT_LVL);
+                    //BleApi.DeviceSubscribe(btEvent.who.address, BAT_VOLTAGE);
+                    //BleApi.DeviceSubscribe(btEvent.who.address, BAT_TEMP);
+                    //BleApi.DeviceSubscribe(btEvent.who.address, RSSI_PWR);
                     break;
             }
         }
@@ -259,7 +161,7 @@ namespace BluetoothLowEnergyApiTest
             // Disable polling and use callback instead - comment to use polling instead
             BleApi.SetEventCallback(ProcessEvent);
 
-            BleApi.SetAdertisementFilter(0x764E, "Neurinnov"); // look for "Nv" manufacturer - content Neurinnov
+            BleApi.SetAdertisementFilter(0xFFFF, "Neurinnov"); // filter "No company ID" manufacturer - content Neurinnov
             //BleApi.RemoveAdertisementFilter();
             BleApi.StartDeviceScan();
 
@@ -268,9 +170,7 @@ namespace BluetoothLowEnergyApiTest
             Console.CancelKeyPress += (sender, eventArgs) =>
             {
                 Console.WriteLine("Cancel event triggered");
-                BleApi.DeviceUnSubscribe(devAddr, UART_RX);
-                BleApi.DeviceUnSubscribe(devAddr, BAT_LVL);
-                BleApi.DeviceUnSubscribe(devAddr, RSSI_PWR);
+                BleApi.DisconnectAll();
                 eventArgs.Cancel = true;
             };
 
@@ -283,7 +183,6 @@ namespace BluetoothLowEnergyApiTest
                     Console.Write(" - Poll");
                     ProcessEvent(btEvent);
                 }
-
                 Thread.Sleep(5);
             }
             

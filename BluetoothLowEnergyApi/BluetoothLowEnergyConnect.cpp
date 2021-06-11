@@ -20,7 +20,6 @@ using namespace Windows::Foundation::Collections;
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 struct ConnectedCharacteristic : Characteristic
 {
 	ConnectedCharacteristic()
@@ -84,14 +83,12 @@ struct ConnectedDevice : Device
 	}
 };
 
-bool DisconnectDevice(ConnectedDevice* device);
-
+fire_and_forget DisconnectDeviceAsync(ConnectedDevice* device);
 
 /// <summary>	The connected lock. </summary>
 //mutex connectedLock;
 /// <summary>	The devices. </summary>
 list<ConnectedDevice*> devices;
-
 
 ConnectedDevice* GetDevice(uint64_t deviceAddress)
 {
@@ -121,7 +118,6 @@ ConnectedDevice* GetDevice(uint64_t deviceAddress)
 /// <param name="obj">	The object. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj)
 {
 	try
@@ -133,11 +129,8 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 		{
 			if (dev.ConnectionStatus() != BluetoothConnectionStatus::Connected)
 			{
-				DisconnectDevice(device);
-				AddEvent(What::DEVICE_LOST, device, nullptr, nullptr);
-				devices.remove(device);
-				delete device;
-				device = nullptr;
+				device->isConnected = false;
+				DisconnectDeviceAsync(device);
 			}
 			else
 			{
@@ -164,7 +157,6 @@ void ConnectionStatusChangedEvent(BluetoothLEDevice dev, const IInspectable& obj
 //{
 //	cout << "PDU changed to " << dev.MaxPduSize() << endl;
 //}
-
 
 fire_and_forget ConnectDeviceAsync(uint64_t deviceAddress)
 {
@@ -216,7 +208,6 @@ fire_and_forget ConnectDeviceAsync(uint64_t deviceAddress)
 			devices.push_back(device);
 
 			// gather name Remove from advertisments
-
 			if (!GetNameFromAdvertisment(deviceAddress, device->name))
 			{
 				wstring w = (wstring)device->leDev.Name();
@@ -270,10 +261,7 @@ fire_and_forget ConnectDeviceAsync(uint64_t deviceAddress)
 		}
 		else
 		{
-			AddEvent(What::DEVICE_DISCONNECTED, device, nullptr, nullptr);
-			DisconnectDevice(device);
-			delete device;
-			device = nullptr;
+			DisconnectDeviceAsync(device);
 		}
 	}
 	catch (...)
@@ -313,17 +301,36 @@ DllExport void ConnectDevice(uint64_t deviceAddress)
 /// <returns>	True if it succeeds, false if it fails. </returns>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool DisconnectDevice(ConnectedDevice* device)
+fire_and_forget DisconnectDeviceAsync(ConnectedDevice* device)
 {
-	if (device == nullptr) return false;
+	if (device == nullptr) co_return;
 	try
 	{
 		for (ConnectedSubscription* sub : device->subscriptions)
 		{
-			sub->characteristic->characteristic.Service().Close();
-			sub->revoker.revoke();
-			delete sub;
-			sub = NULL;
+			try 
+			{
+				if (device->isConnected)
+				{
+					GattCommunicationStatus status = co_await sub->characteristic->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::None);
+
+					if (status == GattCommunicationStatus::Success)
+					{
+						AddEvent(What::CHARACTERISTIC_UNSUBSCRIBED, device, sub->characteristic, nullptr);
+					}
+					else
+					{
+						AddEvent(What::CHARACTERISTIC_NOT_UNSUBSCRIBED, device, sub->characteristic, nullptr);
+					}
+				}
+				sub->characteristic->characteristic.Service().Close();
+				sub->revoker.revoke();
+				delete sub;
+			}
+			catch (...)
+			{
+				AddEvent(What::CHARACTERISTIC_NOT_UNSUBSCRIBED, device, sub->characteristic, nullptr);
+			}
 		}
 
 		for (ConnectedCharacteristic* sub : device->characteristics)
@@ -344,17 +351,31 @@ bool DisconnectDevice(ConnectedDevice* device)
 		device->characteristics.clear();
 
 		device->revoker.revoke();
-		device->isConnected = false;
 		device->leDev.Close();
 		device->leDev = NULL;
 
-		return true;
+		if (device->isConnected)
+		{
+			AddEvent(What::DEVICE_DISCONNECTED, device, nullptr, nullptr);
+		}
+		else
+		{
+			AddEvent(What::DEVICE_LOST, device, nullptr, nullptr);
+		}
+		
+		device->isConnected = false;
+
+		devices.remove(device);
+		delete device;
+		device = nullptr;
+
+		co_return;
 	}
 	catch (...)
 	{
-		AddError("ConnectionStatusChangedEvent error: exception caught", device, nullptr);
+		AddError("DisconnectDeviceAsync error: exception caught", device, nullptr);
 	}
-	return false;
+	co_return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -375,13 +396,7 @@ void DisconnectDevice(uint64_t deviceAddress)
 		device = GetDevice(deviceAddress);
 		if (device != nullptr)
 		{
-			if (DisconnectDevice(device))
-			{
-				AddEvent(What::DEVICE_DISCONNECTED, device, nullptr, nullptr);
-			}
-			devices.remove(device);
-			delete device;
-			device = nullptr;
+			DisconnectDeviceAsync(device);
 			return;
 		}
 	}
@@ -538,7 +553,6 @@ DllExport void DeviceWrite(uint64_t deviceAddress, wchar_t* uuid, Data* data)
 	try
 	{
 		DeviceWriteAsync(deviceAddress, uuid, *data);
-		//thread(DeviceWriteAsync, deviceAddress, uuid, *data).detach();
 	}
 	catch (...)
 	{
@@ -566,7 +580,7 @@ fire_and_forget DeviceReadAsync(uint64_t deviceAddress, wchar_t* uuid)
 	try
 	{
 		{
-			////lock_guard lock(connectedLock);
+			//lock_guard lock(connectedLock);
 			device = GetDevice(deviceAddress);
 			if (device == nullptr) co_return;
 		}
@@ -618,7 +632,6 @@ DllExport void DeviceRead(uint64_t deviceAddress, wchar_t* uuid)
 	try
 	{
 		DeviceReadAsync(deviceAddress, uuid);
-		//thread(DeviceReadAsync, deviceAddress, uuid).detach();
 	}
 	catch (...)
 	{
@@ -760,7 +773,7 @@ fire_and_forget DeviceUnSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Device subscribe. </summary>
+/// <summary>	Device characteristic subscribe. </summary>
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ///
@@ -782,6 +795,15 @@ DllExport void DeviceSubscribe(uint64_t deviceAddress, wchar_t* uuid)
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Device characteristic unsubscribe. </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+///
+/// <param name="deviceAddress">	The device address. </param>
+/// <param name="uuid">				[in,out] If non-null, the uuid. </param>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 DllExport void DeviceUnSubscribe(uint64_t deviceAddress, wchar_t* uuid)
 {
 	if (deviceAddress == 0)return;
@@ -796,6 +818,12 @@ DllExport void DeviceUnSubscribe(uint64_t deviceAddress, wchar_t* uuid)
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Clean </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void CleanConnect()
 {
 	try
@@ -805,9 +833,7 @@ void CleanConnect()
 		{
 			for (ConnectedDevice* device : devices)
 			{
-				DisconnectDevice(device);
-				delete device;
-				device = nullptr;
+				DisconnectDeviceAsync(device);
 			}
 			devices.clear();
 		}
@@ -819,7 +845,7 @@ void CleanConnect()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>	Function - Clean quit / init. </summary>
+/// <summary>	Disconnect all devices </summary>
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -831,10 +857,7 @@ DllExport void DisconnectAll()
 		//lock_guard lock(connectedLock);
 		for (ConnectedDevice* device : devices)
 		{
-			DisconnectDevice(device);
-			AddEvent(What::DEVICE_DISCONNECTED, device, nullptr, nullptr);
-			delete device;
-			device = nullptr;
+			DisconnectDeviceAsync(device);
 		}
 		devices.clear();
 	}
