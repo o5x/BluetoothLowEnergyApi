@@ -866,3 +866,18 @@ DllExport void DisconnectAll()
 		AddError("DisconnectAll error: exception caught", nullptr, nullptr);
 	}
 }
+
+
+DllExport int16_t ConnectedCount()
+{
+	try
+	{
+		return (int16_t)devices.size();
+	}
+	catch (...)
+	{
+		AddError("ConnectedCount error: exception caught", nullptr, nullptr);
+	}
+
+	return -1;
+}

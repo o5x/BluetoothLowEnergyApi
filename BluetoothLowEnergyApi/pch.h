@@ -11,12 +11,6 @@
 // Windows Header Files
 #include <windows.h>
 
-// Memory leaks
-#pragma init_seg( compiler )
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-
 // add headers that you want to pre-compile here
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Foundation.Collections.h>

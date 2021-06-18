@@ -23,15 +23,20 @@ struct AdvertisedDevice : Device
 {
 	/// <summary>	The last advertisment. </summary>
 	chrono::steady_clock::time_point lastAdvertisment;
+	std::map<uint8_t, std::vector<uint8_t>> advertisedData;
+	bool filtered = true;
 };
 
 /// <summary>	The advertised lock. </summary>
 //mutex advertisedLock;
 
+int32_t AdvertisementDeviceLostTimeoutMs = 15000;
+
 //mutex mtxtest;
 /// <summary>	The advertised devices. </summary>
 list<AdvertisedDevice*> advertisedDevices;
 
+std::map<uint8_t, vector<uint8_t>> advertisementFilters;
 
 /// <summary>	The watcher. </summary>
 BluetoothLEAdvertisementWatcher watcher = BluetoothLEAdvertisementWatcher();
@@ -42,6 +47,9 @@ bool threadRun = false;
 /// <summary>	True to thread running. </summary>
 bool threadRunning = false;
 //thread;
+
+void updateFiltered(AdvertisedDevice* advertisedDevice);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Functions - Advertised devices. </summary>
@@ -83,22 +91,82 @@ AdvertisedDevice* GetAdvertisedDevice(uint64_t deviceAddress)
 /// <param name="eventArgs">	Event information to send to registered event handlers. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+bool AdvUpdate(AdvertisedDevice* advertisedDevice, BluetoothLEAdvertisementReceivedEventArgs eventArgs)
+{
+	bool updated = false;
+	advertisedDevice->lastAdvertisment = std::chrono::steady_clock::now();
+
+	IVector<BluetoothLEAdvertisementDataSection> dataSections = eventArgs.Advertisement().DataSections();
+	
+	for (BluetoothLEAdvertisementDataSection dataSection : dataSections)
+	{
+		uint8_t key = dataSection.DataType();
+		uint8_t dataLen = dataSection.Data().Length();
+		vector<uint8_t> data;
+		for (uint8_t i = 0; i < dataLen; i++)
+		{
+			data.push_back(dataSection.Data().data()[i]);
+		}
+
+		if (data != advertisedDevice->advertisedData[key])
+		{
+			advertisedDevice->advertisedData[key] = data;
+			updated = true;
+		}
+	}
+
+	updateFiltered(advertisedDevice);
+	return updated;
+}
+
 void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothLEAdvertisementReceivedEventArgs eventArgs)
 {
 	if (eventArgs.AdvertisementType() == BluetoothLEAdvertisementType::NonConnectableUndirected) return;
 
 	AdvertisedDevice* advertisedDevice = nullptr;
 
-	//if (eventArgs.Advertisement().LocalName().size())
+	//if (eventArgs.Advertisement().DataSections().Size())
 	//{
-	//	wcout << " + Advertisement = " << (wstring)eventArgs.Advertisement().LocalName() << "  " << eventArgs.Advertisement().ManufacturerData().Size() << endl;
+	//	wcout << "\n + Advertisement from \"" << (wstring)eventArgs.Advertisement().LocalName() << "\" = " << eventArgs.Advertisement().ManufacturerData().Size()  << " / " << eventArgs.Advertisement().DataSections().Size()  << endl;
+
+	//	//wcout << " | FLAGS " << std::hex << (int)eventArgs.Advertisement().GetManufacturerDataByCompanyId(0xFFFF).Size() << endl;
+	//	//wcout << " | FLAGS " << std::hex << (int)eventArgs.Advertisement().ServiceUuids().Size() << endl;
+	//	
+	//	for (size_t i = 0; i < eventArgs.Advertisement().DataSections().Size(); i++)
+	//	{
+	//		wcout << " | ADVdata section[" << i << "](" << eventArgs.Advertisement().DataSections().GetAt(i).Data().Length() << ") ";
+
+	//		uint8_t* d = eventArgs.Advertisement().DataSections().GetAt(i).Data().data();
+	//		uint8_t dt = eventArgs.Advertisement().DataSections().GetAt(i).DataType();
+
+	//		std::cout << setfill('0') << setw(2) << std::hex << (int)dt << " = ";
+	//		for (size_t j = 0; j < eventArgs.Advertisement().DataSections().GetAt(i).Data().Length(); j++)
+	//		{
+	//			uint8_t* d = eventArgs.Advertisement().DataSections().GetAt(i).Data().data();
+	//			cout << (int) d[j] << " ";
+	//		}
+	//		cout << std::dec << std::endl;
+	//	}
 
 	//	for (size_t i = 0; i < eventArgs.Advertisement().ManufacturerData().Size(); i++)
 	//	{
-	//		wcout << " | ADVdata " << i << " " << eventArgs.Advertisement().ManufacturerData().GetAt(i).CompanyId() << "  " << eventArgs.Advertisement().ManufacturerData().GetAt(i).Data().Length() << endl;
+	//		wcout << " | ADVdata manufac[" << i << "](" << eventArgs.Advertisement().ManufacturerData().GetAt(i).Data().Length() << ") ";
+
+	//		uint8_t* d = eventArgs.Advertisement().ManufacturerData().GetAt(i).Data().data();
+	//		uint8_t dt = eventArgs.Advertisement().ManufacturerData().GetAt(i).CompanyId();
+
+	//		std::cout << setfill('0') << setw(2) << std::hex << (int)dt << " = ";
+	//		for (size_t j = 0; j < eventArgs.Advertisement().ManufacturerData().GetAt(i).Data().Length(); j++)
+	//		{
+	//			uint8_t* d = eventArgs.Advertisement().ManufacturerData().GetAt(i).Data().data();
+	//			cout << (int)d[j] << " ";
+	//		}
+	//		cout << std::dec << std::endl;
 	//	}
 	//}
 
+	//return;
+	
 	try
 	{
 		wstring localname = (wstring)eventArgs.Advertisement().LocalName();
@@ -113,8 +181,15 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 			{
 				wcscpy_s(advertisedDevice->name, sizeof(advertisedDevice->name) / sizeof(wchar_t), localname.c_str());
 				//wcout << L" - update " << advertisedDevice.print() << endl;
+			}
+
+			bool updated = AdvUpdate(advertisedDevice, eventArgs);
+
+			if (!advertisedDevice->filtered && updated)
+			{
 				AddEvent(What::DISCOVERED_UPDATED, advertisedDevice, nullptr, nullptr);
 			}
+			
 			advertisedDevice->lastAdvertisment = std::chrono::steady_clock::now();
 			return;
 		}
@@ -123,9 +198,7 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 		advertisedDevice->address = eventArgs.BluetoothAddress();
 		wcscpy_s(advertisedDevice->name, sizeof(advertisedDevice->name) / sizeof(wchar_t), localname.c_str());
 		//wcout << L" - add " << advertisedDevice->print() << endl;
-		advertisedDevice->lastAdvertisment = std::chrono::steady_clock::now();
-		AddEvent(What::DISCOVERED_NEW, advertisedDevice, nullptr, nullptr);
-
+		AdvUpdate(advertisedDevice, eventArgs);
 		advertisedDevices.push_back(advertisedDevice);
 	}
 	catch (...)
@@ -142,6 +215,11 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 
 void timeoutThread()
 {
+	if (AdvertisementDeviceLostTimeoutMs < 0)
+	{
+		return;
+	}
+
 	std::chrono::steady_clock::time_point t;
 	while (threadRun)
 	{
@@ -151,9 +229,13 @@ void timeoutThread()
 			//lock_guard lock(advertisedLock);
 			for (AdvertisedDevice* advertisedDevice : advertisedDevices)
 			{
-				if (std::chrono::duration_cast<std::chrono::milliseconds>(t - advertisedDevice->lastAdvertisment).count() > LOST_TIMEOUT_MS)
+				if (std::chrono::duration_cast<std::chrono::milliseconds>(t - advertisedDevice->lastAdvertisment).count() > AdvertisementDeviceLostTimeoutMs)
 				{
 					advertisedDevices.remove(advertisedDevice);
+					if (!advertisedDevice->filtered)
+					{
+						AddEvent(What::DISCOVERED_LOST, advertisedDevice, nullptr, nullptr);
+					}
 					delete advertisedDevice;
 					advertisedDevice = nullptr;
 					break;
@@ -179,22 +261,83 @@ void timeoutThread()
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-DllExport void RemoveAdertisementFilter()
+bool filtered(std::map<uint8_t, vector<uint8_t>> dev)
 {
-	watcher.AdvertisementFilter().Advertisement().ManufacturerData().Clear();
+	std::map<uint8_t, vector<uint8_t>>::iterator it;
+
+	for (it = advertisementFilters.begin(); it != advertisementFilters.end(); ++it)
+	{
+		if (advertisementFilters[it->first] != dev[it->first])
+		{
+			return true;
+		}
+	}
+
+	return false; // we don't filter
 }
 
-DllExport void SetAdertisementFilter(uint16_t CompanyId, wchar_t *data)
+void updateFiltered(AdvertisedDevice* advertisedDevice)
 {
-	RemoveAdertisementFilter();
+	bool f = filtered(advertisedDevice->advertisedData);
 
-	BluetoothLEManufacturerData manufacturerData;
-	manufacturerData.CompanyId(CompanyId); // look for "Nv"
-	DataWriter dw;
-	dw.WriteString(hstring(data));	// look for content Neurinnov
-	manufacturerData.Data(dw.DetachBuffer());
-	watcher.AdvertisementFilter().Advertisement().ManufacturerData().Clear();
-	watcher.AdvertisementFilter().Advertisement().ManufacturerData().Append(manufacturerData);
+	if (advertisedDevice->filtered && !f)
+	{
+		advertisedDevice->filtered = false;
+		AddEvent(What::DISCOVERED_NEW, advertisedDevice, nullptr, nullptr);
+	}
+	else if (!advertisedDevice->filtered && f)
+	{
+		advertisedDevice->filtered = true;
+		AddEvent(What::DISCOVERED_LOST, advertisedDevice, nullptr, nullptr);
+	}
+}
+
+
+void ReMatchAdvertisements()
+{
+	for (AdvertisedDevice* advertisedDevice : advertisedDevices)
+	{
+		updateFiltered(advertisedDevice);
+	}
+}
+
+DllExport void RemoveAdertisementFilters()
+{	
+	advertisementFilters.clear();
+}
+
+DllExport void AddAdertisementFilter(uint8_t key, uint8_t* data, uint16_t len)
+{
+	vector<uint8_t> advd;
+	for (size_t i = 0; i < len; i++)
+	{
+		advd.push_back(data[i]);
+	}
+	advertisementFilters[key] = advd;
+	ReMatchAdvertisements();
+}
+
+DllExport void RemoveAdertisementFilter(uint8_t key)
+{
+	try 
+	{
+		advertisementFilters.erase(key);
+	}
+	catch (...)
+	{
+
+	}
+	ReMatchAdvertisements();
+}
+
+DllExport bool SetAdvertisementDeviceLostTimeout(int32_t timeout_ms)
+{
+	if (0 <= timeout_ms && timeout_ms < 1000)
+	{
+		return false;
+	}
+	AdvertisementDeviceLostTimeoutMs = timeout_ms;
+	return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -202,7 +345,6 @@ DllExport void SetAdertisementFilter(uint16_t CompanyId, wchar_t *data)
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 DllExport void StartDeviceScan()
 {
@@ -358,7 +500,9 @@ void CleanScan()
 				advDevice = nullptr;
 			}
 			advertisedDevices.clear();
-		}			
+		}
+
+		RemoveAdertisementFilters();
 	}
 	catch (...)
 	{

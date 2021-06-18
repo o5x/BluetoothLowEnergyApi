@@ -1,12 +1,12 @@
-﻿////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <file>  BluetoothLowEnergyApiTest\BleApi.cs </file>
-///
-/// <copyright file="BleApi.cs" company="arrol.fr">
-/// Copyright (c) 2021 arrol.fr. All rights reserved.
-/// </copyright>
-///
-/// <summary>   Implements the ble API class. </summary>
-////////////////////////////////////////////////////////////////////////////////////////////////////
+﻿///////////////////////////////////////////////////////////////////////////////////////////////////
+// <file>  BluetoothLowEnergyApiTest\BleApi.cs </file>
+//
+// <copyright file="BleApi.cs" company="arrol.fr">
+// Copyright (c) 2021 arrol.fr. All rights reserved.
+// </copyright>
+//
+// <summary>   Implements the ble API class. </summary>
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 using System;
 using System.Linq;
@@ -310,6 +310,13 @@ public class BleApi
     [DllImport("BluetoothLowEnergyApi.dll")]
     public static extern bool IsBluetoothEnabled();
 
+
+
+
+
+
+
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// <summary>   Device scan functions. </summary>
     ///
@@ -336,6 +343,52 @@ public class BleApi
 
     [DllImport("BluetoothLowEnergyApi.dll")]
     public static extern void CleanAdvertisedDevices();
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// <summary>   Add Scan filter. </summary>
+    ///
+    /// <remarks>   Arrol, 13/04/2021. </remarks>
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
+    public static extern void AddAdertisementFilter(byte key, byte[] data, byte len);
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// <summary>   Remove Scan filter. </summary>
+    ///
+    /// <remarks>   Arrol, 13/04/2021. </remarks>
+    /// 
+    /// <param name="key">    The advertisement key. </param>
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
+    public static extern void RemoveAdertisementFilter(byte key);
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// <summary>   Remove All Scan Filters. </summary>
+    ///
+    /// <remarks>   Arrol, 13/04/2021. </remarks>
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
+    public static extern void RemoveAdertisementFilters();
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// <summary>	Set Advertisement device lost timeout. </summary>
+    ///
+    /// <remarks>	Arrol, 13/04/2021. </remarks>
+    ///
+    /// <param name="timeout_ms">	            The timeout in milliseconds. </param>
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
+    public static extern bool SetAdvertisementDeviceLostTimeout(Int32 timeout_ms);
+
+
+
+
+
+
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// <summary>   connect functions. </summary>
@@ -411,7 +464,6 @@ public class BleApi
     ///
     /// <param name="deviceAddress">    The device address. </param>
     /// <param name="uuid">             The uuid. </param>
-    /// <param name="data">             [in,out] The data. </param>
     ////////////////////////////////////////////////////////////////////////////////////////////////////
 
     [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
@@ -429,6 +481,14 @@ public class BleApi
     [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
     public static extern void DeviceSubscribe(UInt64 deviceAddress, string uuid);
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// <summary>   Device unsubscribe. </summary>
+    ///
+    /// <remarks>   Arrol, 13/04/2021. </remarks>
+    ///
+    /// <param name="deviceAddress">    The device address. </param>
+    /// <param name="uuid">             The uuid. </param>
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
 
     [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
     public static extern void DeviceUnSubscribe(UInt64 deviceAddress, string uuid);
@@ -452,31 +512,19 @@ public class BleApi
     public static extern void DisconnectAll();
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    /// <summary>   Set Scan Filter. </summary>
+    /// <summary>   Get connected device count. </summary>
     ///
     /// <remarks>   Arrol, 13/04/2021. </remarks>
     ////////////////////////////////////////////////////////////////////////////////////////////////////
 
     [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
-    public static extern void SetAdertisementFilter(UInt16 CompanyId, string data);
-
-
-    ////////////////////////////////////////////////////////////////////////////////////////////////////
-    /// <summary>   Remove Scan Filter. </summary>
-    ///
-    /// <remarks>   Arrol, 13/04/2021. </remarks>
-    ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
-    public static extern void RemoveAdertisementFilter();
-
+    public static extern Int16 ConnectedCount();
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// <summary>   Constructor. </summary>
     ///
     /// <remarks>   Arrol, 13/04/2021. </remarks>
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
     BleApi()
     {

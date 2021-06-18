@@ -227,6 +227,30 @@
             
              <remarks>   Arrol, 13/04/2021. </remarks>
         </member>
+        <member name="M:BleApi.AddAdertisementFilter(System.Byte,System.Byte[],System.Byte)">
+             <summary>   Add Scan filter. </summary>
+            
+             <remarks>   Arrol, 13/04/2021. </remarks>
+        </member>
+        <member name="M:BleApi.RemoveAdertisementFilter(System.Byte)">
+             <summary>   Remove Scan filter. </summary>
+            
+             <remarks>   Arrol, 13/04/2021. </remarks>
+             
+             <param name="key">    The advertisement key. </param>
+        </member>
+        <member name="M:BleApi.RemoveAdertisementFilters">
+             <summary>   Remove All Scan Filters. </summary>
+            
+             <remarks>   Arrol, 13/04/2021. </remarks>
+        </member>
+        <member name="M:BleApi.SetAdvertisementDeviceLostTimeout(System.Int32)">
+             <summary>	Set Advertisement device lost timeout. </summary>
+            
+             <remarks>	Arrol, 13/04/2021. </remarks>
+            
+             <param name="timeout_ms">	            The timeout in milliseconds. </param>
+        </member>
         <member name="M:BleApi.ConnectDevice(System.UInt64)">
              <summary>   connect functions. </summary>
             
@@ -275,10 +299,17 @@
             
              <param name="deviceAddress">    The device address. </param>
              <param name="uuid">             The uuid. </param>
-             <param name="data">             [in,out] The data. </param>
         </member>
         <member name="M:BleApi.DeviceSubscribe(System.UInt64,System.String)">
              <summary>   Device subscribe. </summary>
+            
+             <remarks>   Arrol, 13/04/2021. </remarks>
+            
+             <param name="deviceAddress">    The device address. </param>
+             <param name="uuid">             The uuid. </param>
+        </member>
+        <member name="M:BleApi.DeviceUnSubscribe(System.UInt64,System.String)">
+             <summary>   Device unsubscribe. </summary>
             
              <remarks>   Arrol, 13/04/2021. </remarks>
             
@@ -295,13 +326,8 @@
             
              <remarks>   Arrol, 13/04/2021. </remarks>
         </member>
-        <member name="M:BleApi.SetAdertisementFilter(System.UInt16,System.String)">
-             <summary>   Set Scan Filter. </summary>
-            
-             <remarks>   Arrol, 13/04/2021. </remarks>
-        </member>
-        <member name="M:BleApi.RemoveAdertisementFilter">
-             <summary>   Remove Scan Filter. </summary>
+        <member name="M:BleApi.ConnectedCount">
+             <summary>   Get connected device count. </summary>
             
              <remarks>   Arrol, 13/04/2021. </remarks>
         </member>

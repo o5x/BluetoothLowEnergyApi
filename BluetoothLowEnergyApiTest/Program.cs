@@ -9,7 +9,7 @@ namespace BluetoothLowEnergyApiTest
         static bool run = true;
 
         // Target device
-        static string deviceName = "NV-arm";
+        static string deviceName = "NV-arm-";
 
         // Characteristics
         static string UART_RX = "{6e400002-b5a3-f393-e0a9-e50e24dcca9e}";
@@ -161,8 +161,9 @@ namespace BluetoothLowEnergyApiTest
             // Disable polling and use callback instead - comment to use polling instead
             BleApi.SetEventCallback(ProcessEvent);
 
-            BleApi.SetAdertisementFilter(0xFFFF, "Neurinnov"); // filter "No company ID" manufacturer - content Neurinnov
-            //BleApi.RemoveAdertisementFilter();
+            BleApi.RemoveAdertisementFilters();
+            byte[] filter = { 0xFF, 0xFF, 0x4E, 0x65, 0x75, 0x72, 0x69, 0x6E, 0x6E, 0x6F, 0x76 }; // 0xFFFF Neurinnov
+            BleApi.AddAdertisementFilter(0xFF, filter, (byte)filter.Length);
             BleApi.StartDeviceScan();
 
             BleApi.Event btEvent = new BleApi.Event();
@@ -170,7 +171,14 @@ namespace BluetoothLowEnergyApiTest
             Console.CancelKeyPress += (sender, eventArgs) =>
             {
                 Console.WriteLine("Cancel event triggered");
-                BleApi.DisconnectAll();
+                if(BleApi.ConnectedCount() == 0)
+                {
+                    run = false;
+                }
+                else
+                {
+                    BleApi.DisconnectAll();
+                }               
                 eventArgs.Cancel = true;
             };
 
