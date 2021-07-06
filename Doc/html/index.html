@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=9"/>
 <meta name="generator" content="Doxygen 1.9.1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>BluetoothLowEnergyApi: Main Page</title>
+<title>BluetoothLowEnergyApi: BluetoothLowEnergyApi Dll</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -80,11 +80,169 @@ $(document).ready(function(){initNavTree('index.html',''); initResizable(); });
 </iframe>
 </div>
 
-<div class="header">
+<div class="PageDoc"><div class="header">
   <div class="headertitle">
-<div class="title">BluetoothLowEnergyApi Documentation</div>  </div>
+<div class="title">BluetoothLowEnergyApi Dll </div>  </div>
 </div><!--header-->
 <div class="contents">
+<div class="textblock"><p><a class="anchor" id="md_C__Users_arrol_source_repos_BluetoothLowEnergyApi_README"></a> <img src="screen.png" alt="" class="inline" title="Console screenshot"/></p>
+<p>Simple Dynamic Linked Library (DLL) allowing to communicate with bluetooth devices. Initially created for Unity.</p>
+<p>This project is based on <a href="https://docs.microsoft.com/de-de/windows/uwp/devices-sensors/bluetooth-low-energy-overview">UWP BLE API</a>.</p>
+<h1><a class="anchor" id="autotoc_md1"></a>
+Features</h1>
+<ul>
+<li>Continuous device advertisment scan</li>
+<li>Connect Bluetooth devices</li>
+<li>Disconnect Bluetooth devices</li>
+<li>Write data to characteristics</li>
+<li>Subscribe / read from characteristics</li>
+<li>Poll or Callback on event</li>
+<li>Detect if device is disconnected (lost)</li>
+<li>Check if the device is bluetooth enabled</li>
+<li>Error management</li>
+</ul>
+<h1><a class="anchor" id="autotoc_md2"></a>
+How to use</h1>
+<p>The interface is done in C#, you can easily translate to any other language.</p>
+<p>Copy <a href="BluetoothLowEnergyApiTest/BleApi.cs">BluetoothLowEnergyApiTest/BleApi.cs</a> and <a href="BluetoothLowEnergyApiTest/BluetoothLowEnergyApi.dll">BluetoothLowEnergyApiTest/BluetoothLowEnergyApi.dll</a>, and use the BleApi class as static to interface with bluetooth devices (sample code available in <a href="BluetoothLowEnergyApiTest/Program.cs">BluetoothLowEnergyApiTest/Program.cs</a>) used in <a href="#Test">Test</a> section</p>
+<h1><a class="anchor" id="autotoc_md3"></a>
+Code</h1>
+<h2><a class="anchor" id="autotoc_md4"></a>
+Events</h2>
+<p>When polling data events we gather two variables : Who (<code>struct <a class="el" href="struct_device.html" title="Structures.">Device</a></code>) and What (<code>enum What</code>), who as the device responsible for this event and what the kind of event trigerred, you can find the list of events below:</p>
+<div class="fragment"><div class="line"><span class="keyword">enum</span> What</div>
+<div class="line">{</div>
+<div class="line">    LIBRARY_ERROR,                      <span class="comment">// the library error</span></div>
+<div class="line">    LIBRARY_NOTHING,                    <span class="comment">// the library nothing (should never happen)</span></div>
+<div class="line">    LIBRARY_CALLBACK_SETUP,             <span class="comment">// the library callback setup</span></div>
+<div class="line">    DISCOVERED_STARTED,                 <span class="comment">// the discovered started</span></div>
+<div class="line">    DISCOVERED_STOPPED,                 <span class="comment">// the discovered stopped</span></div>
+<div class="line">    DISCOVERED_NEW,                     <span class="comment">// a device was discovered</span></div>
+<div class="line">    DISCOVERED_UPDATED,                 <span class="comment">// a device advertisement was updated </span></div>
+<div class="line">    DISCOVERED_LOST,                    <span class="comment">// a device was lost (out of range or turned off)</span></div>
+<div class="line">    DISCOVERED_REMOVED,                 <span class="comment">// a device was removed (manually or because of connection)</span></div>
+<div class="line">    DEVICE_CONNECTED,                   <span class="comment">// the device connected</span></div>
+<div class="line">    DEVICE_DISCONNECTED,                <span class="comment">// the device disconnected</span></div>
+<div class="line">    DEVICE_LOST,                        <span class="comment">// the device lost connection</span></div>
+<div class="line">    CHARACTERISTIC_SCAN_NEW,            <span class="comment">// the characteristic scan new</span></div>
+<div class="line">    CHARACTERISTIC_SCAN_OVER,           <span class="comment">// the characteristic scan over</span></div>
+<div class="line">    CHARACTERISTIC_WRITTEN,             <span class="comment">// the characteristic written</span></div>
+<div class="line">    CHARACTERISTIC_NOT_WRITTEN,         <span class="comment">// the characteristic not written</span></div>
+<div class="line">    CHARACTERISTIC_READED,              <span class="comment">// the characteristic readed</span></div>
+<div class="line">    CHARACTERISTIC_NOT_READED,          <span class="comment">// the characteristic not readed</span></div>
+<div class="line">    CHARACTERISTIC_SUBSCRIBED,          <span class="comment">// the characteristic subscribed</span></div>
+<div class="line">    CHARACTERISTIC_NOT_SUBSCRIBED,      <span class="comment">// the characteristic not subscribed</span></div>
+<div class="line">    CHARACTERISTIC_UNSUBSCRIBED,        <span class="comment">// the characteristic unsubscribed</span></div>
+<div class="line">    CHARACTERISTIC_NOT_UNSUBSCRIBED,    <span class="comment">// the characteristic not unsubscribed</span></div>
+<div class="line">    CHARACTERISTIC_NOTIFICATION         <span class="comment">// the characteristic notification</span></div>
+<div class="line">};</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md5"></a>
+Structures</h2>
+<div class="fragment"><div class="line"><span class="keyword">struct </span><a class="code" href="struct_device.html">Device</a></div>
+<div class="line">{</div>
+<div class="line">    <span class="keyword">public</span> UInt64 <a class="code" href="struct_device.html#a34210a034e4031759d9e25645b0d8502">address</a>;</div>
+<div class="line">    <span class="keyword">public</span> <span class="keywordtype">string</span> <a class="code" href="struct_device.html#aefa2f614b4f1caf7df044e825524636a">name</a>;</div>
+<div class="line">}</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span><a class="code" href="struct_characteristic.html">Characteristic</a></div>
+<div class="line">{</div>
+<div class="line">    <span class="keyword">public</span> <span class="keywordtype">bool</span> <a class="code" href="struct_characteristic.html#a2bdd65e92a979ebce9f0027af94af5ee">isService</a>;</div>
+<div class="line">    <span class="keyword">public</span> <span class="keywordtype">string</span> <a class="code" href="struct_characteristic.html#a60ab456007ed24803c29869e0541d77e">uuid</a>;</div>
+<div class="line">}</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span><a class="code" href="struct_data.html">Data</a></div>
+<div class="line">{</div>
+<div class="line">    <span class="keyword">public</span> <span class="keywordtype">byte</span>[] <a class="code" href="struct_data.html#a9313b223afdf0563de806f09d156a57d">buf</a>;</div>
+<div class="line">    <span class="keyword">public</span> <span class="keywordtype">short</span> <a class="code" href="struct_data.html#a5093b4a280ac574451618b432c89be30">size</a>;</div>
+<div class="line">}</div>
+<div class="line"> </div>
+<div class="line"><span class="keyword">struct </span><a class="code" href="struct_event.html">Event</a></div>
+<div class="line">{</div>
+<div class="line">    <span class="keyword">public</span> What <a class="code" href="struct_event.html#a5813ecc6733a43e41a5d6f6a1284fecf">what</a>;</div>
+<div class="line">    <span class="keyword">public</span> <a class="code" href="struct_device.html">Device</a> <a class="code" href="struct_event.html#ae242f99b49c3e3ea53ecc801ea393043">who</a>;</div>
+<div class="line">    <span class="keyword">public</span> <a class="code" href="struct_characteristic.html">Characteristic</a> <a class="code" href="struct_event.html#adff08dc38d9b0d5287f4b5bb2513f4b9">characteristic</a>;</div>
+<div class="line">    <span class="keyword">public</span> <a class="code" href="struct_data.html">Data</a> <a class="code" href="struct_event.html#a8edc65927ca56db0a69974f9edf073b2">data</a>;</div>
+<div class="line">}</div>
+<div class="ttc" id="astruct_characteristic_html"><div class="ttname"><a href="struct_characteristic.html">Characteristic</a></div><div class="ttdoc">A characteristic.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:101</div></div>
+<div class="ttc" id="astruct_characteristic_html_a2bdd65e92a979ebce9f0027af94af5ee"><div class="ttname"><a href="struct_characteristic.html#a2bdd65e92a979ebce9f0027af94af5ee">Characteristic::isService</a></div><div class="ttdeci">bool isService</div><div class="ttdoc">True if is service, false if not.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:103</div></div>
+<div class="ttc" id="astruct_characteristic_html_a60ab456007ed24803c29869e0541d77e"><div class="ttname"><a href="struct_characteristic.html#a60ab456007ed24803c29869e0541d77e">Characteristic::uuid</a></div><div class="ttdeci">wchar_t uuid[50]</div><div class="ttdoc">The uuid[ 50].</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:105</div></div>
+<div class="ttc" id="astruct_data_html"><div class="ttname"><a href="struct_data.html">Data</a></div><div class="ttdoc">A data.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:115</div></div>
+<div class="ttc" id="astruct_data_html_a5093b4a280ac574451618b432c89be30"><div class="ttname"><a href="struct_data.html#a5093b4a280ac574451618b432c89be30">Data::size</a></div><div class="ttdeci">uint16_t size</div><div class="ttdoc">The size.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:119</div></div>
+<div class="ttc" id="astruct_data_html_a9313b223afdf0563de806f09d156a57d"><div class="ttname"><a href="struct_data.html#a9313b223afdf0563de806f09d156a57d">Data::buf</a></div><div class="ttdeci">uint8_t buf[512]</div><div class="ttdoc">The buf[ 512].</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:117</div></div>
+<div class="ttc" id="astruct_device_html"><div class="ttname"><a href="struct_device.html">Device</a></div><div class="ttdoc">Structures.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:87</div></div>
+<div class="ttc" id="astruct_device_html_a34210a034e4031759d9e25645b0d8502"><div class="ttname"><a href="struct_device.html#a34210a034e4031759d9e25645b0d8502">Device::address</a></div><div class="ttdeci">uint64_t address</div><div class="ttdoc">The address.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:89</div></div>
+<div class="ttc" id="astruct_device_html_aefa2f614b4f1caf7df044e825524636a"><div class="ttname"><a href="struct_device.html#aefa2f614b4f1caf7df044e825524636a">Device::name</a></div><div class="ttdeci">wchar_t name[50]</div><div class="ttdoc">The name[ 50].</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:91</div></div>
+<div class="ttc" id="astruct_event_html"><div class="ttname"><a href="struct_event.html">Event</a></div><div class="ttdoc">An event.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:129</div></div>
+<div class="ttc" id="astruct_event_html_a5813ecc6733a43e41a5d6f6a1284fecf"><div class="ttname"><a href="struct_event.html#a5813ecc6733a43e41a5d6f6a1284fecf">Event::what</a></div><div class="ttdeci">What what</div><div class="ttdoc">The what.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:131</div></div>
+<div class="ttc" id="astruct_event_html_a8edc65927ca56db0a69974f9edf073b2"><div class="ttname"><a href="struct_event.html#a8edc65927ca56db0a69974f9edf073b2">Event::data</a></div><div class="ttdeci">Data data</div><div class="ttdoc">The data.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:137</div></div>
+<div class="ttc" id="astruct_event_html_adff08dc38d9b0d5287f4b5bb2513f4b9"><div class="ttname"><a href="struct_event.html#adff08dc38d9b0d5287f4b5bb2513f4b9">Event::characteristic</a></div><div class="ttdeci">Characteristic characteristic</div><div class="ttdoc">The characteristic.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:135</div></div>
+<div class="ttc" id="astruct_event_html_ae242f99b49c3e3ea53ecc801ea393043"><div class="ttname"><a href="struct_event.html#ae242f99b49c3e3ea53ecc801ea393043">Event::who</a></div><div class="ttdeci">Device who</div><div class="ttdoc">The who.</div><div class="ttdef"><b>Definition:</b> BluetoothLowEnergyApi.h:133</div></div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md6"></a>
+Interface functions</h2>
+<div class="fragment"><div class="line"><span class="keyword">static</span> <span class="keywordtype">bool</span> PollEvents(ref <a class="code" href="struct_event.html">Event</a> ev);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> SetEventCallback(CallbackEvent callback);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> RemoveEventCallback();</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">bool</span> IsBluetoothEnabled();</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">// Device scan functions </span></div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> StartDeviceScan();</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> StopDeviceScan();</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> CleanAdvertisedDevices();</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> AddAdertisementFilter(<span class="keywordtype">byte</span> key, <span class="keywordtype">byte</span>[] data, <span class="keywordtype">byte</span> len);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> RemoveAdertisementFilter(<span class="keywordtype">byte</span> key);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> RemoveAdertisementFilters();</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">bool</span> SetAdvertisementDeviceLostTimeout(Int32 timeout_ms);</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">// Connect functions   </span></div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> ConnectDevice(UInt64 deviceAddress);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> DisconnectDevice(UInt64 deviceAddress);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">bool</span> IsDeviceConnected(UInt64 deviceAddress);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> DisconnectAll();</div>
+<div class="line"><span class="keyword">static</span> Int16 ConnectedCount();</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">// Characteristics</span></div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> DeviceWrite(UInt64 deviceAddress, <span class="keywordtype">string</span> uuid, ref <a class="code" href="struct_data.html">Data</a> data);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> DeviceRead(UInt64 deviceAddress, <span class="keywordtype">string</span> uuid);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> DeviceSubscribe(UInt64 deviceAddress, <span class="keywordtype">string</span> uuid);</div>
+<div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> DeviceUnSubscribe(UInt64 deviceAddress, <span class="keywordtype">string</span> uuid);</div>
+<div class="line"> </div>
+<div class="line"><span class="comment">// Library clean</span></div>
+<div class="line"><span class="keywordtype">void</span> Clean();</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md7"></a>
+Build</h1>
+<p>There is a prebuild dll included <a href="BluetoothLowEnergyApiTest/BluetoothLowEnergyApi.dll">BluetoothLowEnergyApiTest/BluetoothLowEnergyApi.dll</a>. You also build it yourself by following these steps :</p><ul>
+<li>Open the solution file BluetoothLowEnergyApi.sln with VisualStudio (tested with Community 2019). You may be asked install VisualStudio components when you open the project. The needed components are C++ Desktop and UWP.</li>
+<li>Choose configuration "Release" and "x64" (to match your machine architecture).</li>
+<li>In the project explorer, right-click the project "BluetoothLowEnergyApi" and choose "Compile".</li>
+<li>Wait until the compilation finishes successfully.</li>
+</ul>
+<p>Now you find the file BluetoothLowEnergyApi.dll in the folder x64/Release. You can copy this dll where you need it. It also automatically copy the dll in <code>BluetoothLowEnergyApiTest/</code></p>
+<h1><a class="anchor" id="autotoc_md8"></a>
+Test</h1>
+<p>The BluetoothLowEnergyTest project depends on the BluetoothLowEnergy and will be built automatically if there is any change in the dll, it allows to quickly test changes.</p>
+<p>To test the API follow these steps :</p><ul>
+<li>Open the solution file BluetoothLowEnergyApi.sln with VisualStudio. You may be asked install VisualStudio components when you open the project. The needed components are C++ Desktop and UWP.</li>
+<li>Set BluetoothLowEnergyApiTest as <b>Startup Project</b> (right click -&gt; Set as Startup Project)</li>
+<li>Choose configuration "Release" and "x64"</li>
+<li>Compile and run, F5 (with debugger) or Ctrl+F5 (without debugger)</li>
+<li>Wait until the compilation finishes successfully and the program to run.</li>
+</ul>
+<div class="fragment"><div class="line"><span class="keywordtype">string</span> devName = <span class="stringliteral">&quot;NV-arm&quot;</span>;</div>
+<div class="line"><span class="keywordtype">string</span> UART_RX = <span class="stringliteral">&quot;{6e400002-b5a3-f393-e0a9-e50e24dcca9e}&quot;</span>;</div>
+<div class="line"><span class="keywordtype">string</span> UART_TX = <span class="stringliteral">&quot;{6e400003-b5a3-f393-e0a9-e50e24dcca9e}&quot;</span>;</div>
+</div><!-- fragment --><p> <em><b>Important Note</b></em> : The Characteristics need to be surrounded with braces : <code>{}</code></p>
+<p>This Test program is looking for a device <code>devName</code> to write and subscribe to the characteristics <code>UART_TX</code> and <code>UART_RX</code>. When started it will tell the user if the bluetooth is ready to be used (available + enabled), start scanning the devices, connect, write and subscribe, and show de notification data string in the console. When the first notification is recieved it disconnect the device and close the program, Otherwise you can cancel with Ctrl+C (will disconnect and exit).</p>
+<p>If the device is lost, it will automatically reconnect when available.</p>
+<h1><a class="anchor" id="autotoc_md9"></a>
+Issues</h1>
+<p>Please feel free to submit issues with any bugs or other unforseen issues you experience. If you experience problems, open an issue describing the problem and how to reproduce it, and I'll be sure to take a look at it.</p>
+<h1><a class="anchor" id="autotoc_md10"></a>
+Licence</h1>
+<p><a href="https://choosealicense.com/licenses/mit/">MIT</a></p>
+<h1><a class="anchor" id="autotoc_md11"></a>
+Author</h1>
+<p>Arrol - <a href="https://arrol.fr">arrol.fr</a> </p>
+</div></div><!-- PageDoc -->
 </div><!-- contents -->
 </div><!-- doc-content -->
 <!-- start footer part -->

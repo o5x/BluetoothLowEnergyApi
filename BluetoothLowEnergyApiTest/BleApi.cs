@@ -1,11 +1,11 @@
 ﻿///////////////////////////////////////////////////////////////////////////////////////////////////
-// <file>  BluetoothLowEnergyApiTest\BleApi.cs </file>
-//
-// <copyright file="BleApi.cs" company="arrol.fr">
-// Copyright (c) 2021 arrol.fr. All rights reserved.
-// </copyright>
-//
-// <summary>   Implements the ble API class. </summary>
+/// <file>  BluetoothLowEnergyApiTest\BleApi.cs </file>
+///
+/// <copyright file="BleApi.cs" company="arrol.fr">
+/// Copyright (c) 2021 arrol.fr. All rights reserved.
+/// </copyright>
+///
+/// <summary>   Implements the ble API class. </summary>
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 using System;
@@ -17,13 +17,13 @@ using System.Runtime.InteropServices;
 ///
 /// <remarks>   Arrol, 13/04/2021. </remarks>
 ///
-/// <param name="ev">   The ev. </param>
+/// <param name="ev">   The event. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 public delegate void CallbackEvent(BleApi.Event ev);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// <summary>   A ble api. </summary>
+/// <summary>   The Ble Interface class. </summary>
 ///
 /// <remarks>   Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,48 +40,70 @@ public class BleApi
     {
         /// <summary>   An enum constant representing the library error option. </summary>
         LIBRARY_ERROR,
-        /// <summary>   An enum constant representing the library nothing option. </summary>
+
+        /// <summary>   An enum constant representing the library nothing option (should never happen). </summary>
         LIBRARY_NOTHING,
+
         /// <summary>   An enum constant representing the library callback setup option. </summary>
         LIBRARY_CALLBACK_SETUP,
+
         /// <summary>   An enum constant representing the discovered started option. </summary>
         DISCOVERED_STARTED,
+
         /// <summary>   An enum constant representing the discovered stopped option. </summary>
         DISCOVERED_STOPPED,
-        /// <summary>   An enum constant representing the discovered new option. </summary>
+
+        /// <summary>   An enum constant representing a device discovered. </summary>
         DISCOVERED_NEW,
-        /// <summary>   An enum constant representing the discovered updated option. </summary>
+
+        /// <summary>   An enum constant representing a device advertisement updated . </summary>
         DISCOVERED_UPDATED,
-        /// <summary>   An enum constant representing the discovered lost option. </summary>
+
+        /// <summary>   An enum constant representing a device lost (out of range or turned off). </summary>
         DISCOVERED_LOST,
-        /// <summary>   An enum constant representing the discovered removed option. </summary>
+
+        /// <summary>   An enum constant representing a device removed (manually or because of connection). </summary>
         DISCOVERED_REMOVED,
+
         /// <summary>   An enum constant representing the device connected option. </summary>
         DEVICE_CONNECTED,
+
         /// <summary>   An enum constant representing the device disconnected option. </summary>
         DEVICE_DISCONNECTED,
-        /// <summary>   An enum constant representing the device lost option. </summary>
+
+        /// <summary>   An enum constant representing the device lost connection option. </summary>
         DEVICE_LOST,
+
         /// <summary>   An enum constant representing the characteristic scan new option. </summary>
         CHARACTERISTIC_SCAN_NEW,
+
         /// <summary>   An enum constant representing the characteristic scan over option. </summary>
         CHARACTERISTIC_SCAN_OVER,
+
         /// <summary>   An enum constant representing the characteristic written option. </summary>
         CHARACTERISTIC_WRITTEN,
+
         /// <summary>   An enum constant representing the characteristic not written option. </summary>
         CHARACTERISTIC_NOT_WRITTEN,
+
         /// <summary>   An enum constant representing the characteristic readed option. </summary>
         CHARACTERISTIC_READED,
+
         /// <summary>   An enum constant representing the characteristic not readed option. </summary>
         CHARACTERISTIC_NOT_READED,
+
         /// <summary>   An enum constant representing the characteristic subscribed option. </summary>
         CHARACTERISTIC_SUBSCRIBED,
+
         /// <summary>   An enum constant representing the characteristic not subscribed option. </summary>
         CHARACTERISTIC_NOT_SUBSCRIBED,
+
         /// <summary>   An enum constant representing the characteristic unsubscribed option. </summary>
         CHARACTERISTIC_UNSUBSCRIBED,
+
         /// <summary>   An enum constant representing the characteristic not unsubscribed option. </summary>
         CHARACTERISTIC_NOT_UNSUBSCRIBED,
+
         /// <summary>   An enum constant representing the characteristic notification option. </summary>
         CHARACTERISTIC_NOTIFICATION
     };
@@ -95,10 +117,11 @@ public class BleApi
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct Device
     {
-        /// <summary>   The address. </summary>
+        /// <summary>   The device address. </summary>
         [MarshalAs(UnmanagedType.U8)]
         public UInt64 address;
-        /// <summary>   The name. </summary>
+
+        /// <summary>   The device name. </summary>
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 50)]
         public string name;
 
@@ -147,6 +170,7 @@ public class BleApi
         /// <summary>   True if is service, false if not. </summary>
         [MarshalAs(UnmanagedType.U1)]
         public bool isService;
+
         /// <summary>   The uuid. </summary>
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 50)]
         public string uuid;
@@ -161,11 +185,7 @@ public class BleApi
 
         override public string ToString()
         {
-            if (uuid.Length > 0)
-            {
-                return (isService ? "S" : "C") + uuid;
-            }
-            return (isService ? "S" : "C") + "{INVALID_UUID}";
+            return (isService ? "S" : "C") + (uuid.Length > 0 ? uuid : "{INVALID_UUID}");
         }
     }
 
@@ -181,6 +201,7 @@ public class BleApi
         /// <summary>   The buffer. </summary>
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 512)]
         public byte[] buf;
+
         /// <summary>   The size. </summary>
         [MarshalAs(UnmanagedType.U2)]
         public UInt16 size;
@@ -208,7 +229,7 @@ public class BleApi
 
         public string ToBytes()
         {
-            if(size > 0)
+            if (size > 0)
             {
                 string os = string.Format("{0,3:D3}", size) + "[";
                 for (int i = 0; i < size - 1; i++) os += buf[i].ToString("X2") + "-";
@@ -228,13 +249,16 @@ public class BleApi
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct Event
     {
-        /// <summary>   The what. </summary>
+        /// <summary>   What is the event. </summary>
         public What what;
-        /// <summary>   The who. </summary>
+
+        /// <summary>   Who trigerred it (if device). </summary>
         public Device who;
-        /// <summary>   The characteristic. </summary>
+
+        /// <summary>   The event characteristic. </summary>
         public Characteristic characteristic;
-        /// <summary>   The data. </summary>
+
+        /// <summary>   The event data. </summary>
         public Data data;
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -247,15 +271,15 @@ public class BleApi
 
         override public string ToString()
         {
-            if(what == What.LIBRARY_NOTHING)
+            if (what == What.LIBRARY_NOTHING)
             {
                 return what.ToString();
             }
 
             string os = "";
 
-            if(who.address != 0) os += who + " ";
-            if(characteristic.uuid.Length != 0) os += characteristic + " ";
+            if (who.address != 0) os += who + " ";
+            if (characteristic.uuid.Length != 0) os += characteristic + " ";
             os += what + " ";
             if (data.size != 0)
             {
@@ -310,13 +334,6 @@ public class BleApi
     [DllImport("BluetoothLowEnergyApi.dll")]
     public static extern bool IsBluetoothEnabled();
 
-
-
-
-
-
-
-
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// <summary>   Device scan functions. </summary>
     ///
@@ -357,7 +374,7 @@ public class BleApi
     /// <summary>   Remove Scan filter. </summary>
     ///
     /// <remarks>   Arrol, 13/04/2021. </remarks>
-    /// 
+    ///
     /// <param name="key">    The advertisement key. </param>
     ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -383,12 +400,6 @@ public class BleApi
 
     [DllImport("BluetoothLowEnergyApi.dll", CharSet = CharSet.Unicode)]
     public static extern bool SetAdvertisementDeviceLostTimeout(Int32 timeout_ms);
-
-
-
-
-
-
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// <summary>   connect functions. </summary>
@@ -426,12 +437,12 @@ public class BleApi
     public static extern bool IsDeviceConnected(UInt64 deviceAddress);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    /// <summary>   characteristics. </summary>
+    /// <summary>   Write characteristic to connected device. </summary>
     ///
     /// <remarks>   Arrol, 13/04/2021. </remarks>
     ///
     /// <param name="deviceAddress">    The device address. </param>
-    /// <param name="uuid">             The uuid. </param>
+    /// <param name="uuid">             The characteristic uuid. </param>
     /// <param name="data">             [in,out] The data. </param>
     ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -526,13 +537,13 @@ public class BleApi
     /// <remarks>   Arrol, 13/04/2021. </remarks>
     ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    BleApi()
+    private BleApi()
     {
         Clean();
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    /// <summary>   Destructor. </summary>
+    /// <summary>   Destructor cleaning devices. </summary>
     ///
     /// <remarks>   Arrol, 13/04/2021. </remarks>
     ////////////////////////////////////////////////////////////////////////////////////////////////////

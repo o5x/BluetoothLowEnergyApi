@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['advertiseddevice_26',['AdvertisedDevice',['../struct_advertised_device.html',1,'']]]
+  ['advertiseddevice_28',['AdvertisedDevice',['../struct_advertised_device.html',1,'']]]
 ];

@@ -1,8 +1,8 @@
 var hierarchy =
 [
-    [ "BluetoothLowEnergyApi", "class_bluetooth_low_energy_api.html", null ],
     [ "Characteristic", "struct_characteristic.html", [
-      [ "ConnectedCharacteristic", "struct_connected_characteristic.html", null ]
+      [ "ConnectedCharacteristic", "struct_connected_characteristic.html", null ],
+      [ "ConnectedService", "struct_connected_service.html", null ]
     ] ],
     [ "ConnectedSubscription", "struct_connected_subscription.html", null ],
     [ "Data", "struct_data.html", null ],

@@ -8,7 +8,6 @@ This project is based on [UWP BLE API](https://docs.microsoft.com/de-de/windows/
 
 ## Features
 
-- DLL threaded API
 - Continuous device advertisment scan
 - Connect Bluetooth devices
 - Disconnect Bluetooth devices
@@ -34,27 +33,29 @@ When polling data events we gather two variables : Who (`struct Device`) and Wha
 ```CS
 enum What
 {
-    LIBRARY_ERROR,                      // Error
-    LIBRARY_NOTHING,                    // Nothing
-    LIBRARY_CALLBACK_SETUP,             // When callback is setup
-    DISCOVERED_STARTED,                 // Started discovery
-    DISCOVERED_STOPPED,                 // Stopped discovery
-    DISCOVERED_NEW,                     // Device Advertisment : new device
-    DISCOVERED_UPDATED,                 // Device Advertisment name updated
-    DISCOVERED_LOST,                    // Device Advertisment lost (not advertisment for 10s)
-    DISCOVERED_REMOVED,                 // Device Advertisment removed (when connecting or clearing list)
-    DEVICE_CONNECTED,                   // Device connected
-    DEVICE_DISCONNECTED,                // Device disconnected (from code) - also triggered when not DEVICE_CONNECTED
-    DEVICE_LOST,                        // Device disconnected (external cause)
-    CHARACTERISTIC_SCAN_NEW,            // New Characteristic 
-    CHARACTERISTIC_SCAN_OVER,           // Characteristic scan complete
-    CHARACTERISTIC_WRITTEN,             // Characteristic write successful
-    CHARACTERISTIC_NOT_WRITTEN,         // Characteristic write error
-    CHARACTERISTIC_READED,              // Characteristic read successful
-    CHARACTERISTIC_NOT_READED,          // Characteristic read error
-    CHARACTERISTIC_SUBSCRIBED,          // Characteristic subscribe successful
-    CHARACTERISTIC_NOT_SUBSCRIBED,      // Characteristic subscribe error
-    CHARACTERISTIC_NOTIFICATION         // Notification recieved
+    LIBRARY_ERROR,                      // the library error
+    LIBRARY_NOTHING,                    // the library nothing (should never happen)
+    LIBRARY_CALLBACK_SETUP,             // the library callback setup
+    DISCOVERED_STARTED,                 // the discovered started
+    DISCOVERED_STOPPED,                 // the discovered stopped
+    DISCOVERED_NEW,                     // a device was discovered
+    DISCOVERED_UPDATED,                 // a device advertisement was updated 
+    DISCOVERED_LOST,                    // a device was lost (out of range or turned off)
+    DISCOVERED_REMOVED,                 // a device was removed (manually or because of connection)
+    DEVICE_CONNECTED,                   // the device connected
+    DEVICE_DISCONNECTED,                // the device disconnected
+    DEVICE_LOST,                        // the device lost connection
+    CHARACTERISTIC_SCAN_NEW,            // the characteristic scan new
+    CHARACTERISTIC_SCAN_OVER,           // the characteristic scan over
+    CHARACTERISTIC_WRITTEN,             // the characteristic written
+    CHARACTERISTIC_NOT_WRITTEN,         // the characteristic not written
+    CHARACTERISTIC_READED,              // the characteristic readed
+    CHARACTERISTIC_NOT_READED,          // the characteristic not readed
+    CHARACTERISTIC_SUBSCRIBED,          // the characteristic subscribed
+    CHARACTERISTIC_NOT_SUBSCRIBED,      // the characteristic not subscribed
+    CHARACTERISTIC_UNSUBSCRIBED,        // the characteristic unsubscribed
+    CHARACTERISTIC_NOT_UNSUBSCRIBED,    // the characteristic not unsubscribed
+    CHARACTERISTIC_NOTIFICATION         // the characteristic notification
 };
 ```
 
@@ -92,31 +93,36 @@ struct Event
 ### Interface functions
 
 ```CS   
-    bool PollEvents(out Event ev);
+    
+static bool PollEvents(ref Event ev);
+static void SetEventCallback(CallbackEvent callback);
+static void RemoveEventCallback();
+static bool IsBluetoothEnabled();
 
-    void SetEventCallback(CallbackEvent callback);
-    void RemoveEventCallback();
+// Device scan functions 
+static void StartDeviceScan();
+static void StopDeviceScan();
+static void CleanAdvertisedDevices();
+static void AddAdertisementFilter(byte key, byte[] data, byte len);
+static void RemoveAdertisementFilter(byte key);
+static void RemoveAdertisementFilters();
+static bool SetAdvertisementDeviceLostTimeout(Int32 timeout_ms);
 
-    bool IsBluetoothEnabled();
+// Connect functions   
+static void ConnectDevice(UInt64 deviceAddress);
+static void DisconnectDevice(UInt64 deviceAddress);
+static bool IsDeviceConnected(UInt64 deviceAddress);
+static void DisconnectAll();
+static Int16 ConnectedCount();
 
-    // Device scan functions    
-    void StartDeviceScan();
-    void StopDeviceScan();
-    void CleanAdvertisedDevices();
+// Characteristics
+static void DeviceWrite(UInt64 deviceAddress, string uuid, ref Data data);
+static void DeviceRead(UInt64 deviceAddress, string uuid);
+static void DeviceSubscribe(UInt64 deviceAddress, string uuid);
+static void DeviceUnSubscribe(UInt64 deviceAddress, string uuid);
 
-    // Connect functions   
-    void ConnectDevice(UInt64 deviceAddress);
-    void DisconnectDevice(UInt64 deviceAddress);
-    bool IsDeviceConnected(UInt64 deviceAddress);
-
-    // Characteristics
-    void DeviceWrite(UInt64 deviceAddress, string uuid, ref Data data);
-    void DeviceRead(UInt64 deviceAddress, string uuid, ref Data data);
-    void DeviceSubscribe(UInt64 deviceAddress, string uuid);
-
-
-    // Library clean    
-    void Clean();
+// Library clean
+void Clean();
 ```
 
 ## Build
@@ -142,13 +148,13 @@ To test the API follow these steps :
 - Wait until the compilation finishes successfully and the program to run.
 
 ```CS
-static readonly string devName = "NV-Command";
-static readonly string devWriteCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
-static readonly string devReadCharacteristic = "{0000ffe1-0000-1000-8000-00805f9b34fb}";
+string devName = "NV-arm";
+string UART_RX = "{6e400002-b5a3-f393-e0a9-e50e24dcca9e}";
+string UART_TX = "{6e400003-b5a3-f393-e0a9-e50e24dcca9e}";
 ```
 ***Important Note*** : The Characteristics need to be surrounded with braces : `{}`
 
-This Test program is looking for a device `devName` to write and subscribe to the characteristicd `devWriteCharacteristic` and `devReadCharacteristic`. When started it will tell the user if the bluetooth is ready to be used (available + enabled), start scanning the devices, connect, write and subscribe, and show de notification data string in the console. When the first notification is recieved it disconnect the device and close the program, Otherwise you can cancel with Ctrl+C (will disconnect and exit).
+This Test program is looking for a device `devName` to write and subscribe to the characteristics `UART_TX` and `UART_RX`. When started it will tell the user if the bluetooth is ready to be used (available + enabled), start scanning the devices, connect, write and subscribe, and show de notification data string in the console. When the first notification is recieved it disconnect the device and close the program, Otherwise you can cancel with Ctrl+C (will disconnect and exit).
 
 If the device is lost, it will automatically reconnect when available.
 

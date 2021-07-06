@@ -9,7 +9,7 @@ namespace BluetoothLowEnergyApiTest
         static bool run = true;
 
         // Target device
-        static string deviceName = "NV-arm-";
+        static string deviceName = "NV-arm";
 
         // Characteristics
         static string UART_RX = "{6e400002-b5a3-f393-e0a9-e50e24dcca9e}";

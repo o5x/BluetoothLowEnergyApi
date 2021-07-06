@@ -25,6 +25,20 @@
 var NAVTREE =
 [
   [ "BluetoothLowEnergyApi", "index.html", [
+    [ "BluetoothLowEnergyApi Dll", "index.html", [
+      [ "Features", "index.html#autotoc_md1", null ],
+      [ "How to use", "index.html#autotoc_md2", null ],
+      [ "Code", "index.html#autotoc_md3", [
+        [ "Events", "index.html#autotoc_md4", null ],
+        [ "Structures", "index.html#autotoc_md5", null ],
+        [ "Interface functions", "index.html#autotoc_md6", null ]
+      ] ],
+      [ "Build", "index.html#autotoc_md7", null ],
+      [ "Test", "index.html#autotoc_md8", null ],
+      [ "Issues", "index.html#autotoc_md9", null ],
+      [ "Licence", "index.html#autotoc_md10", null ],
+      [ "Author", "index.html#autotoc_md11", null ]
+    ] ],
     [ "Classes", "annotated.html", [
       [ "Class List", "annotated.html", "annotated_dup" ],
       [ "Class Index", "classes.html", null ],
