@@ -3,40 +3,43 @@ using System.Threading;
 
 namespace BluetoothLowEnergyApiTest
 {
-    class Program
+    internal class Program
     {
         // Global exit condition
-        static bool run = true;
+        private static bool run = true;
 
         // Target device
-        static string deviceName = "NV-arm";
+        private static string deviceName = "NV-arm";
 
         // Characteristics
-        static string UART_RX = "{6e400002-b5a3-f393-e0a9-e50e24dcca9e}";
-        static string UART_TX = "{6e400003-b5a3-f393-e0a9-e50e24dcca9e}";
+        private static string UART_RX = "{6e400002-b5a3-f393-e0a9-e50e24dcca9e}";
 
-        static string BAT_LVL = "{00002a19-0000-1000-8000-00805f9b34fb}";
-        static string BAT_VOLTAGE = "{00002b18-0000-1000-8000-00805f9b34fb}";
-        static string BAT_TEMP = "{00002a6e-0000-1000-8000-00805f9b34fb}";
+        private static string UART_TX = "{6e400003-b5a3-f393-e0a9-e50e24dcca9e}";
 
-        static string RSSI_PWR = "{00002a07-0000-1000-8000-00805f9b34fb}";
+        private static string BAT_LVL = "{00002a19-0000-1000-8000-00805f9b34fb}";
+        private static string BAT_VOLTAGE = "{00002b18-0000-1000-8000-00805f9b34fb}";
+        private static string BAT_TEMP = "{00002a6e-0000-1000-8000-00805f9b34fb}";
+
+        private static string RSSI_PWR = "{00002a07-0000-1000-8000-00805f9b34fb}";
 
         // Compute times
-        static DateTime startTime;
-        static DateTime lastTime;
+        private static DateTime startTime;
 
-        static readonly int deltatimesLen = 20;
-        static double[] deltatimes = new double[deltatimesLen];
-        static int indexDeltaTimes = 0;
-        static double avgDeltaTime = 0;
+        private static DateTime lastTime;
+
+        private static readonly int deltatimesLen = 20;
+        private static double[] deltatimes = new double[deltatimesLen];
+        private static int indexDeltaTimes = 0;
+        private static double avgDeltaTime = 0;
 
         // IMUs
-        static IMU imu1 = new IMU(1);
-        static IMU imu2 = new IMU(2);
- 
+        private static IMU imu1 = new IMU(1);
+
+        private static IMU imu2 = new IMU(2);
+
         public static void ProcessEvent(BleApi.Event btEvent)
-        {            
-            if(btEvent.what == BleApi.What.CHARACTERISTIC_NOTIFICATION)
+        {
+            if (btEvent.what == BleApi.What.CHARACTERISTIC_NOTIFICATION)
             {
                 if (btEvent.characteristic.uuid == BAT_LVL)
                 {
@@ -69,7 +72,7 @@ namespace BluetoothLowEnergyApiTest
                         }
 
                         Console.Write(imu1.ToString());
-                        Console.Write(imu2.ToString());                 
+                        Console.Write(imu2.ToString());
                     }
 
                     // Compute Average time
@@ -77,7 +80,7 @@ namespace BluetoothLowEnergyApiTest
                     TimeSpan dt = now - lastTime;
                     TimeSpan time = now - startTime;
 
-                    if(lastTime.Millisecond == 0)
+                    if (lastTime.Millisecond == 0)
                     {
                         dt = TimeSpan.Zero;
                     }
@@ -122,22 +125,26 @@ namespace BluetoothLowEnergyApiTest
                         BleApi.ConnectDevice(btEvent.who.address);
                     }
                     break;
+
                 case BleApi.What.DEVICE_CONNECTED:
                     BleApi.StopDeviceScan();
                     break;
+
                 case BleApi.What.DEVICE_DISCONNECTED:
                     run = false;
                     break;
+
                 case BleApi.What.DEVICE_LOST:
                     run = false;
                     break;
+
                 case BleApi.What.CHARACTERISTIC_SCAN_OVER:
                     startTime = DateTime.Now;
 
                     BleApi.DeviceWriteString(btEvent.who.address, UART_RX, "+");
                     //BleApi.DeviceWriteString(btEvent.who.address, UART_RX, "Hello Bluetooth ");
-                    //BleApi.DeviceWriteString(btEvent.who.address, UART_RX, "it is " + timestamp + "\r\n"); 
-                    
+                    //BleApi.DeviceWriteString(btEvent.who.address, UART_RX, "it is " + timestamp + "\r\n");
+
                     BleApi.DeviceSubscribe(btEvent.who.address, UART_TX);
                     //BleApi.DeviceSubscribe(btEvent.who.address, BAT_LVL);
                     //BleApi.DeviceSubscribe(btEvent.who.address, BAT_VOLTAGE);
@@ -147,7 +154,7 @@ namespace BluetoothLowEnergyApiTest
             }
         }
 
-        static void Main()
+        private static void Main()
         {
             // Make sure there is no previous instance data (if keeping dll loaded (e.g., Unity))
             BleApi.Clean();
@@ -167,18 +174,18 @@ namespace BluetoothLowEnergyApiTest
             BleApi.StartDeviceScan();
 
             BleApi.Event btEvent = new BleApi.Event();
-            
+
             Console.CancelKeyPress += (sender, eventArgs) =>
             {
                 Console.WriteLine("Cancel event triggered");
-                if(BleApi.ConnectedCount() == 0)
+                if (BleApi.ConnectedCount() == 0)
                 {
                     run = false;
                 }
                 else
                 {
                     BleApi.DisconnectAll();
-                }               
+                }
                 eventArgs.Cancel = true;
             };
 
@@ -193,7 +200,7 @@ namespace BluetoothLowEnergyApiTest
                 }
                 Thread.Sleep(5);
             }
-            
+
             BleApi.Clean(); // Make sure to clean before leaving (unity)
             return;
         }

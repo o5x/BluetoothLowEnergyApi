@@ -50,7 +50,6 @@ bool threadRunning = false;
 
 void updateFiltered(AdvertisedDevice* advertisedDevice);
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Functions - Advertised devices. </summary>
 ///
@@ -97,7 +96,7 @@ bool AdvUpdate(AdvertisedDevice* advertisedDevice, BluetoothLEAdvertisementRecei
 	advertisedDevice->lastAdvertisment = std::chrono::steady_clock::now();
 
 	IVector<BluetoothLEAdvertisementDataSection> dataSections = eventArgs.Advertisement().DataSections();
-	
+
 	for (BluetoothLEAdvertisementDataSection dataSection : dataSections)
 	{
 		uint8_t key = dataSection.DataType();
@@ -125,48 +124,6 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 
 	AdvertisedDevice* advertisedDevice = nullptr;
 
-	//if (eventArgs.Advertisement().DataSections().Size())
-	//{
-	//	wcout << "\n + Advertisement from \"" << (wstring)eventArgs.Advertisement().LocalName() << "\" = " << eventArgs.Advertisement().ManufacturerData().Size()  << " / " << eventArgs.Advertisement().DataSections().Size()  << endl;
-
-	//	//wcout << " | FLAGS " << std::hex << (int)eventArgs.Advertisement().GetManufacturerDataByCompanyId(0xFFFF).Size() << endl;
-	//	//wcout << " | FLAGS " << std::hex << (int)eventArgs.Advertisement().ServiceUuids().Size() << endl;
-	//	
-	//	for (size_t i = 0; i < eventArgs.Advertisement().DataSections().Size(); i++)
-	//	{
-	//		wcout << " | ADVdata section[" << i << "](" << eventArgs.Advertisement().DataSections().GetAt(i).Data().Length() << ") ";
-
-	//		uint8_t* d = eventArgs.Advertisement().DataSections().GetAt(i).Data().data();
-	//		uint8_t dt = eventArgs.Advertisement().DataSections().GetAt(i).DataType();
-
-	//		std::cout << setfill('0') << setw(2) << std::hex << (int)dt << " = ";
-	//		for (size_t j = 0; j < eventArgs.Advertisement().DataSections().GetAt(i).Data().Length(); j++)
-	//		{
-	//			uint8_t* d = eventArgs.Advertisement().DataSections().GetAt(i).Data().data();
-	//			cout << (int) d[j] << " ";
-	//		}
-	//		cout << std::dec << std::endl;
-	//	}
-
-	//	for (size_t i = 0; i < eventArgs.Advertisement().ManufacturerData().Size(); i++)
-	//	{
-	//		wcout << " | ADVdata manufac[" << i << "](" << eventArgs.Advertisement().ManufacturerData().GetAt(i).Data().Length() << ") ";
-
-	//		uint8_t* d = eventArgs.Advertisement().ManufacturerData().GetAt(i).Data().data();
-	//		uint8_t dt = eventArgs.Advertisement().ManufacturerData().GetAt(i).CompanyId();
-
-	//		std::cout << setfill('0') << setw(2) << std::hex << (int)dt << " = ";
-	//		for (size_t j = 0; j < eventArgs.Advertisement().ManufacturerData().GetAt(i).Data().Length(); j++)
-	//		{
-	//			uint8_t* d = eventArgs.Advertisement().ManufacturerData().GetAt(i).Data().data();
-	//			cout << (int)d[j] << " ";
-	//		}
-	//		cout << std::dec << std::endl;
-	//	}
-	//}
-
-	//return;
-	
 	try
 	{
 		wstring localname = (wstring)eventArgs.Advertisement().LocalName();
@@ -189,7 +146,7 @@ void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher watcher, BluetoothL
 			{
 				AddEvent(What::DISCOVERED_UPDATED, advertisedDevice, nullptr, nullptr);
 			}
-			
+
 			advertisedDevice->lastAdvertisment = std::chrono::steady_clock::now();
 			return;
 		}
@@ -292,7 +249,6 @@ void updateFiltered(AdvertisedDevice* advertisedDevice)
 	}
 }
 
-
 void ReMatchAdvertisements()
 {
 	for (AdvertisedDevice* advertisedDevice : advertisedDevices)
@@ -302,7 +258,7 @@ void ReMatchAdvertisements()
 }
 
 DllExport void RemoveAdertisementFilters()
-{	
+{
 	advertisementFilters.clear();
 }
 
@@ -319,13 +275,12 @@ DllExport void AddAdertisementFilter(uint8_t key, uint8_t* data, uint16_t len)
 
 DllExport void RemoveAdertisementFilter(uint8_t key)
 {
-	try 
+	try
 	{
 		advertisementFilters.erase(key);
 	}
 	catch (...)
 	{
-
 	}
 	ReMatchAdvertisements();
 }
@@ -444,7 +399,6 @@ void CleanAdvertisedDevices()
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 void RemoveAdvertisedDevice(uint64_t devAddress)
 {
 	//lock_guard lock2(advertisedLock);
@@ -464,7 +418,7 @@ void RemoveAdvertisedDevice(uint64_t devAddress)
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool GetNameFromAdvertisment(uint64_t deviceAddress, wchar_t * devName)
+bool GetNameFromAdvertisment(uint64_t deviceAddress, wchar_t* devName)
 {
 	//lock_guard lock2(advertisedLock);
 	AdvertisedDevice* advDev = GetAdvertisedDevice(deviceAddress);

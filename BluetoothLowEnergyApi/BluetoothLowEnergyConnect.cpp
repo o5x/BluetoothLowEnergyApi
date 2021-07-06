@@ -13,7 +13,6 @@ using namespace Windows::Devices::Bluetooth::GenericAttributeProfile;
 using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation::Collections;
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	The connected charactrristic (used locally). </summary>
 ///
@@ -59,7 +58,6 @@ struct ConnectedSubscription
 	/// <summary>	The revoker. </summary>
 	GattCharacteristic::ValueChanged_revoker revoker;
 };
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	A connected device. </summary>
@@ -189,7 +187,7 @@ fire_and_forget ConnectDeviceAsync(uint64_t deviceAddress)
 		//std::cout << "MAX PDU SIZE = "<< gatt.MaxPduSize() << endl;
 		//gatt.MaxPduSizeChanged(auto_revoke, MaxPduSizeChangedEvent);
 		//gatt.Close();
-	
+
 		/*if (device->leDev.DeviceInformation().Pairing().CanPair())
 		{
 			cout << "can pair" << endl;
@@ -314,7 +312,7 @@ fire_and_forget DisconnectDeviceAsync(ConnectedDevice* device)
 	{
 		for (ConnectedSubscription* sub : device->subscriptions)
 		{
-			try 
+			try
 			{
 				if (device->isConnected)
 				{
@@ -368,7 +366,7 @@ fire_and_forget DisconnectDeviceAsync(ConnectedDevice* device)
 		{
 			AddEvent(What::DEVICE_LOST, device, nullptr, nullptr);
 		}
-		
+
 		device->isConnected = false;
 
 		devices.remove(device);
@@ -682,7 +680,7 @@ fire_and_forget DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 				ConnectedSubscription* sub = new ConnectedSubscription();
 				sub->characteristic = characteristic;
 
-				// TODO test 
+				// TODO test
 				//sub->characteristic->characteristic.ProtectionLevel(GattProtectionLevel::EncryptionRequired);
 
 				GattCommunicationStatus status = co_await sub->characteristic->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::Notify);
@@ -693,11 +691,6 @@ fire_and_forget DeviceSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 						{
 							try
 							{
-								//std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-								//	std::chrono::system_clock::now().time_since_epoch()
-								//	);
-								//std::cout << "DATA at ;" << ms.count() << ";" << args.CharacteristicValue().Length() <<  std::endl;
-
 								Data cd;
 								cd.size = args.CharacteristicValue().Length();
 								memcpy(cd.buf, args.CharacteristicValue().data(), cd.size);
@@ -753,7 +746,6 @@ fire_and_forget DeviceUnSubscribeAsync(uint64_t deviceAddress, wchar_t* uuid)
 				{
 					if (sub->characteristic->characteristic.Uuid() == characteristic->characteristic.Uuid())
 					{
-						
 						GattCommunicationStatus status = co_await sub->characteristic->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue::None);
 						if (status == GattCommunicationStatus::Success)
 						{
@@ -873,6 +865,11 @@ DllExport void DisconnectAll()
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>	Get the number of devices connected </summary>
+///
+/// <remarks>	Arrol, 13/04/2021. </remarks>
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DllExport int16_t ConnectedCount()
 {

@@ -3,7 +3,7 @@ using System.Numerics;
 
 namespace BluetoothLowEnergyApiTest
 {
-    class IMU
+    internal class IMU
     {
         public int id;
         public Vector3 m;
@@ -24,7 +24,7 @@ namespace BluetoothLowEnergyApiTest
             //first = true;
         }
 
-        static Vector3 decodeVector3(byte[] buf, int offset, float scale)
+        private static Vector3 decodeVector3(byte[] buf, int offset, float scale)
         {
             float x = BitConverter.ToInt16(buf, 0 + offset) * scale;
             float y = BitConverter.ToInt16(buf, 2 + offset) * scale;

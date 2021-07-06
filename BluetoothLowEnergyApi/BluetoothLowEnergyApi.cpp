@@ -32,7 +32,6 @@ using namespace Windows::Devices::Bluetooth::GenericAttributeProfile;
 using namespace Windows::Storage::Streams;
 using namespace Windows::Foundation::Collections;
 
-
 /// <summary>	Variables. </summary>
 mutex eventsLock;
 
@@ -41,7 +40,6 @@ queue<Event> events;
 
 /// <summary>	The callback lock. </summary>
 mutex callbackLock;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Callback, called when the event. </summary>
@@ -86,7 +84,7 @@ wstring addrToString(uint64_t addr)
 /// <param name="c">	  	[in,out] If non-null, a Characteristic to process. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void AddError(const char* message, Device * dev , Characteristic *c )
+void AddError(const char* message, Device* dev, Characteristic* c)
 {
 	try
 	{
@@ -166,7 +164,7 @@ void AddEventAsync(Event cb)
 		lock_guard lock(callbackLock);
 		lock_guard lock2(eventsLock);
 		if (eventCallback)	// if callback setup use it
-		{	
+		{
 			thread(eventCallbackAsync, cb).detach();
 			while (!events.empty()) // if there was events waiting before setting up the callback
 			{
@@ -238,7 +236,7 @@ DllExport void RemoveEventCallback()
 /// <param name="d">	 	[in,out] If non-null, a Data to process. </param>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void AddEvent(What what, Device *device, Characteristic *c, Data *d)
+void AddEvent(What what, Device* device, Characteristic* c, Data* d)
 {
 	try
 	{
@@ -296,19 +294,17 @@ DllExport bool IsBluetoothEnabled()
 	return false;
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>	Function - Clean quit / init. </summary>
 ///
 /// <remarks>	Arrol, 13/04/2021. </remarks>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 DllExport void Clean()
 {
 	CleanScan();
 	CleanConnect();
-	
+
 	try
 	{
 		{
