@@ -1,6 +1,6 @@
 # BluetoothLowEnergyApi Dll
 
-![Console screenshot](screen.png)
+![Console screenshot](Doc/screen.png)
 
 Simple Dynamic Linked Library (DLL) allowing to communicate with bluetooth devices. Initially created for Unity.
 
